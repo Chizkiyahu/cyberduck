@@ -21,8 +21,8 @@ import ch.cyberduck.core.PathContainerService;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.InteroperabilityException;
 import ch.cyberduck.core.exception.NotfoundException;
+import ch.cyberduck.core.features.Timestamp;
 import ch.cyberduck.core.io.DisabledStreamListener;
-import ch.cyberduck.core.shared.DefaultTimestampFeature;
 import ch.cyberduck.core.transfer.TransferStatus;
 
 import org.apache.logging.log4j.LogManager;
@@ -34,7 +34,7 @@ import com.google.api.client.util.DateTime;
 import com.google.api.services.storage.Storage;
 import com.google.api.services.storage.model.StorageObject;
 
-public class GoogleStorageTimestampFeature extends DefaultTimestampFeature {
+public class GoogleStorageTimestampFeature implements Timestamp {
     private static final Logger log = LogManager.getLogger(GoogleStorageTimestampFeature.class);
 
     private final GoogleStorageSession session;
@@ -42,11 +42,15 @@ public class GoogleStorageTimestampFeature extends DefaultTimestampFeature {
 
     public GoogleStorageTimestampFeature(final GoogleStorageSession session) {
         this.session = session;
-        this.containerService = session.getFeature(PathContainerService.class);
+        this.containerService = new GoogleStoragePathContainerService();
     }
 
     @Override
     public void setTimestamp(final Path file, final TransferStatus status) throws BackgroundException {
+        if(file.isVolume()) {
+            log.warn("Skip setting timestamp for {}", file);
+            return;
+        }
         try {
             if(null != status.getModified()) {
                 // The Custom-Time metadata is a user-specified date and time represented in the RFC 3339
@@ -69,9 +73,7 @@ public class GoogleStorageTimestampFeature extends DefaultTimestampFeature {
                 }
             }
             if(failure instanceof InteroperabilityException) {
-                if(log.isWarnEnabled()) {
-                    log.warn(String.format("Retry rewriting file %s with failure %s writing custom time", file, failure));
-                }
+                log.warn("Retry rewriting file {} with failure {} writing custom time", file, failure);
                 // You cannot remove Custom-Time once it's been set on an object. Additionally, the value for Custom-Time cannot
                 // decrease. That is, you cannot set Custom-Time to be an earlier date/time than the existing Custom-Time.
                 // You can, however, effectively remove or reset the Custom-Time by rewriting the object.

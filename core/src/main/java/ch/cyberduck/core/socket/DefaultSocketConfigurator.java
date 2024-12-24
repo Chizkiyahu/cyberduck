@@ -52,11 +52,9 @@ public class DefaultSocketConfigurator implements SocketConfigurator {
         if(preferences.getInteger("connection.buffer.send") > 0) {
             socket.setSendBufferSize(preferences.getInteger("connection.buffer.send"));
         }
-        final int timeout = this.connectionTimeout.getTimeout() * 1000;
-        if(log.isInfoEnabled()) {
-            log.info(String.format("Set timeout to %dms for socket %s", timeout, socket));
-        }
-        socket.setSoTimeout(timeout);
+        final int timeout = connectionTimeout.getTimeout();
+        log.info("Set timeout to {}s for socket {}", timeout, socket);
+        socket.setSoTimeout(timeout * 1000);
         if(preferences.getBoolean("connection.socket.linger")) {
             // The setting only affects socket close. Make sure closing SSL socket does not hang because close_notify cannot be sent.
             socket.setSoLinger(true, timeout);

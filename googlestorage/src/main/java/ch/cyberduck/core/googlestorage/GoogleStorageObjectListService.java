@@ -35,6 +35,7 @@ import ch.cyberduck.core.worker.DefaultExceptionMappingService;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.concurrent.ConcurrentUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -66,7 +67,7 @@ public class GoogleStorageObjectListService implements ListService {
     public GoogleStorageObjectListService(final GoogleStorageSession session, final Integer concurrency) {
         this.session = session;
         this.attributes = new GoogleStorageAttributesFinderFeature(session);
-        this.containerService = session.getFeature(PathContainerService.class);
+        this.containerService = new GoogleStoragePathContainerService();
         this.concurrency = concurrency;
     }
 
@@ -110,9 +111,7 @@ public class GoogleStorageObjectListService implements ListService {
                     for(StorageObject object : response.getItems()) {
                         final String key = object.getName();
                         if(new SimplePathPredicate(PathNormalizer.compose(bucket, key)).test(directory)) {
-                            if(log.isDebugEnabled()) {
-                                log.debug(String.format("Skip placeholder key %s", key));
-                            }
+                            log.debug("Skip placeholder key {}", key);
                             hasDirectoryPlaceholder = true;
                             continue;
                         }
@@ -169,8 +168,10 @@ public class GoogleStorageObjectListService implements ListService {
                             objects.add(Uninterruptibles.getUninterruptibly(f));
                         }
                         catch(ExecutionException e) {
-                            log.warn(String.format("Listing versioned objects failed with execution failure %s", e.getMessage()));
-                            Throwables.throwIfInstanceOf(Throwables.getRootCause(e), BackgroundException.class);
+                            log.warn("Listing versioned objects failed with execution failure {}", e.getMessage());
+                            for(Throwable cause : ExceptionUtils.getThrowableList(e)) {
+                                Throwables.throwIfInstanceOf(cause, BackgroundException.class);
+                            }
                             throw new DefaultExceptionMappingService().map(Throwables.getRootCause(e));
                         }
                     }
@@ -181,9 +182,7 @@ public class GoogleStorageObjectListService implements ListService {
             }
             while(page != null);
             if(!hasDirectoryPlaceholder && objects.isEmpty()) {
-                if(log.isWarnEnabled()) {
-                    log.warn(String.format("No placeholder found for directory %s", directory));
-                }
+                log.warn("No placeholder found for directory {}", directory);
                 throw new NotfoundException(directory.getAbsolute());
             }
             return objects;

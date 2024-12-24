@@ -23,8 +23,10 @@ import ch.cyberduck.binding.Proxy;
 import ch.cyberduck.binding.foundation.NSNotification;
 import ch.cyberduck.binding.foundation.NSNotificationCenter;
 import ch.cyberduck.binding.foundation.NSObject;
+import ch.cyberduck.core.DefaultIOExceptionMappingService;
 import ch.cyberduck.core.Host;
 import ch.cyberduck.core.HostnameConfiguratorFactory;
+import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.idna.PunycodeConverter;
 
 import org.apache.logging.log4j.LogManager;
@@ -32,6 +34,8 @@ import org.apache.logging.log4j.Logger;
 import org.rococoa.Foundation;
 import org.rococoa.ObjCClass;
 import org.rococoa.Rococoa;
+
+import java.net.ConnectException;
 
 public class SystemConfigurationReachability implements Reachability {
     private static final Logger log = LogManager.getLogger(SystemConfigurationReachability.class);
@@ -46,9 +50,7 @@ public class SystemConfigurationReachability implements Reachability {
         }
 
         public void notify(final NSNotification notification) {
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Received notification %s", notification));
-            }
+            log.debug("Received notification {}", notification);
             proxy.change();
         }
     }
@@ -62,32 +64,34 @@ public class SystemConfigurationReachability implements Reachability {
 
             @Override
             public Monitor start() {
-                notificationCenter.addObserver(listener.id(), Foundation.selector("notify:"),
-                        "kNetworkReachabilityChangedNotification", monitor.id());
-                monitor.startReachabilityMonitor();
+                if(monitor.startReachabilityMonitor()) {
+                    notificationCenter.addObserver(listener.id(), Foundation.selector("notify:"),
+                            "kNetworkReachabilityChangedNotification", monitor.id());
+                }
                 return this;
             }
 
             @Override
             public Monitor stop() {
-                monitor.stopReachabilityMonitor();
-                notificationCenter.removeObserver(listener.id());
+                if(monitor.stopReachabilityMonitor()) {
+                    notificationCenter.removeObserver(listener.id());
+                }
                 return this;
             }
         };
     }
 
     @Override
-    public boolean isReachable(final Host bookmark) {
+    public void test(final Host bookmark) throws BackgroundException {
         final String url = toURL(bookmark);
         final SystemConfigurationReachability.Native monitor = SystemConfigurationReachability.Native.monitorForUrl(url);
         final int flags = monitor.getFlags();
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Determined reachability flags %s for %s", flags, url));
-        }
+        log.debug("Determined reachability flags {} for {}", flags, url);
         final boolean reachable = (flags & Native.kSCNetworkReachabilityFlagsReachable) == Native.kSCNetworkReachabilityFlagsReachable;
         final boolean connectionRequired = (flags & Native.kSCNetworkReachabilityFlagsConnectionRequired) == Native.kSCNetworkReachabilityFlagsConnectionRequired;
-        return reachable && !connectionRequired;
+        if(!reachable || connectionRequired) {
+            throw new DefaultIOExceptionMappingService().map(new ConnectException());
+        }
     }
 
     protected static String toURL(final Host bookmark) {

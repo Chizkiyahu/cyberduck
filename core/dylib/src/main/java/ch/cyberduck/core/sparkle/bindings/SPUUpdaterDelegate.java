@@ -45,9 +45,7 @@ public interface SPUUpdaterDelegate {
      * @param updater The updater instance.
      * @return YES if the updater should be relaunched, otherwise NO if it shouldn’t.
      */
-    default boolean updaterShouldRelaunchApplication(SPUUpdater updater) {
-        return true;
-    }
+    boolean updaterShouldRelaunchApplication(SPUUpdater updater);
 
     /**
      * Called immediately before relaunching.
@@ -55,9 +53,7 @@ public interface SPUUpdaterDelegate {
      * @param updater The updater instance.
      */
     default void updaterWillRelaunchApplication(SPUUpdater updater) {
-        if(log.isDebugEnabled()) {
-            log.debug("Will relaunch application");
-        }
+        log.debug("Will relaunch application");
     }
 
     /**
@@ -66,9 +62,7 @@ public interface SPUUpdaterDelegate {
      * @param updater The updater instance.
      * @return YES if the updater should prompt for permission to check for new updates automatically, otherwise NO
      */
-    default boolean updaterShouldPromptForPermissionToCheckForUpdates(SPUUpdater updater) {
-        return false;
-    }
+    boolean updaterShouldPromptForPermissionToCheckForUpdates(SPUUpdater updater);
 
     /**
      * Called when a new valid update is found by the update driver.
@@ -77,9 +71,7 @@ public interface SPUUpdaterDelegate {
      * @param item    The appcast item corresponding to the update that is proposed to be installed.
      */
     default void updater_didFindValidUpdate(SPUUpdater updater, SUAppcastItem item) {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Did find update %s", item));
-        }
+        log.debug("Did find update {}", item);
     }
 
     /**
@@ -88,9 +80,7 @@ public interface SPUUpdaterDelegate {
      * @param updater The updater instance.
      */
     default void updaterDidNotFindUpdate(SPUUpdater updater) {
-        if(log.isDebugEnabled()) {
-            log.debug("No update found");
-        }
+        log.debug("No update found");
     }
 
     /**
@@ -100,9 +90,7 @@ public interface SPUUpdaterDelegate {
      * @param item    The appcast item corresponding to the update that has been downloaded.
      */
     default void updater_didDownloadUpdate(SPUUpdater updater, SUAppcastItem item) {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Did download update %s", item));
-        }
+        log.debug("Did download update {}", item);
     }
 
     /**
@@ -112,9 +100,7 @@ public interface SPUUpdaterDelegate {
      * @param item    The appcast item corresponding to the update that is proposed to be installed.
      */
     default void updater_willInstallUpdate(SPUUpdater updater, SUAppcastItem item) {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Will install update %s", item));
-        }
+        log.debug("Will install update {}", item);
     }
 
     /**
@@ -123,9 +109,7 @@ public interface SPUUpdaterDelegate {
      * @param updater The updater instance.
      */
     default void userDidCancelDownload(SPUUpdater updater) {
-        if(log.isDebugEnabled()) {
-            log.debug("Did cancel update");
-        }
+        log.debug("Did cancel update");
     }
 
     /**
@@ -137,8 +121,6 @@ public interface SPUUpdaterDelegate {
      * @param error   The error that caused the update driver to abort.
      */
     default void updater_didAbortWithError(SPUUpdater updater, NSError error) {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Did abort with error %s", error));
-        }
+        log.debug("Did abort with error {}", error);
     }
 }

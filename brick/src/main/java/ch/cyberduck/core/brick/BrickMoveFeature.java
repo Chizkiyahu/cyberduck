@@ -25,8 +25,6 @@ import ch.cyberduck.core.brick.io.swagger.client.model.MovePathBody;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.features.Delete;
 import ch.cyberduck.core.features.Move;
-import ch.cyberduck.core.preferences.Preferences;
-import ch.cyberduck.core.preferences.PreferencesFactory;
 import ch.cyberduck.core.transfer.TransferStatus;
 
 import org.apache.commons.lang3.StringUtils;
@@ -40,7 +38,6 @@ public class BrickMoveFeature extends BrickFileMigrationFeature implements Move 
     private static final Logger log = LogManager.getLogger(BrickMoveFeature.class);
 
     private final BrickSession session;
-    private final Preferences preferences = PreferencesFactory.get();
 
     public BrickMoveFeature(final BrickSession session) {
         this.session = session;
@@ -52,9 +49,7 @@ public class BrickMoveFeature extends BrickFileMigrationFeature implements Move 
             final BrickApiClient client = new BrickApiClient(session);
             if(status.isExists()) {
                 if(!new CaseInsensitivePathPredicate(file).test(target)) {
-                    if(log.isWarnEnabled()) {
-                        log.warn(String.format("Delete file %s to be replaced with %s", target, file));
-                    }
+                    log.warn("Delete file {} to be replaced with {}", target, file);
                     new BrickDeleteFeature(session).delete(Collections.singletonList(target), callback, delete);
                 }
             }

@@ -21,11 +21,9 @@ package ch.cyberduck.core.openstack;
 import ch.cyberduck.core.ConnectionCallback;
 import ch.cyberduck.core.DefaultIOExceptionMappingService;
 import ch.cyberduck.core.DefaultPathContainerService;
-import ch.cyberduck.core.DisabledListProgressListener;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathContainerService;
 import ch.cyberduck.core.exception.BackgroundException;
-import ch.cyberduck.core.exception.NotfoundException;
 import ch.cyberduck.core.features.Write;
 import ch.cyberduck.core.http.AbstractHttpWriteFeature;
 import ch.cyberduck.core.http.DelayedHttpEntityCallable;
@@ -41,8 +39,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.List;
 
 import ch.iterate.openstack.swift.Constants;
 import ch.iterate.openstack.swift.exception.GenericException;
@@ -52,7 +50,7 @@ public class SwiftWriteFeature extends AbstractHttpWriteFeature<StorageObject> i
     private static final Logger log = LogManager.getLogger(SwiftSession.class);
 
     private final PathContainerService containerService
-        = new DefaultPathContainerService();
+            = new DefaultPathContainerService();
 
     private final SwiftSession session;
     private final SwiftRegionService regionService;
@@ -84,9 +82,7 @@ public class SwiftWriteFeature extends AbstractHttpWriteFeature<StorageObject> i
                             regionService.lookup(file),
                             containerService.getContainer(file).getName(), containerService.getKey(file),
                             entity, headers, checksum.algorithm == HashAlgorithm.md5 ? checksum.hash : null);
-                    if(log.isDebugEnabled()) {
-                        log.debug(String.format("Saved object %s with checksum %s", file, etag));
-                    }
+                    log.debug("Saved object {} with checksum {}", file, etag);
                     final StorageObject stored = new StorageObject(containerService.getKey(file));
                     stored.setMd5sum(etag);
                     stored.setSize(status.getLength());
@@ -109,27 +105,12 @@ public class SwiftWriteFeature extends AbstractHttpWriteFeature<StorageObject> i
     }
 
     @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        final List<Path> segments;
-        long size = 0L;
-        try {
-            segments = new SwiftObjectListService(session, regionService).list(new SwiftSegmentService(session, regionService)
-                .getSegmentsDirectory(file), new DisabledListProgressListener()).toList();
-            if(segments.isEmpty()) {
-                return Write.override;
-            }
-        }
-        catch(NotfoundException e) {
-            return Write.override;
-        }
-        for(Path segment : segments) {
-            size += segment.attributes().getSize();
-        }
-        return new Append(true).withStatus(status).withSize(size);
+    public ChecksumCompute checksum(final Path file, final TransferStatus status) {
+        return ChecksumComputeFactory.get(HashAlgorithm.md5);
     }
 
     @Override
-    public ChecksumCompute checksum(final Path file, final TransferStatus status) {
-        return ChecksumComputeFactory.get(HashAlgorithm.md5);
+    public EnumSet<Flags> features(final Path file) {
+        return EnumSet.of(Flags.checksum);
     }
 }

@@ -72,10 +72,10 @@ public class SDSSessionTest extends AbstractSDSTest {
                 System.getProperties().getProperty("dracoon.user"), System.getProperties().getProperty("dracoon.key")
         ));
         final SDSSession session = new SDSSession(host, new DisabledX509TrustManager(), new DefaultX509KeyManager());
-        assertNotNull(session.open(new DisabledProxyFinder().find(new HostUrlProvider().get(host)), new DisabledHostKeyCallback(), new DisabledLoginCallback(), new DisabledCancelCallback()));
+        assertNotNull(session.open(new DisabledProxyFinder(), new DisabledHostKeyCallback(), new DisabledLoginCallback(), new DisabledCancelCallback()));
         assertTrue(session.isConnected());
         assertNotNull(session.getClient());
-        session.login(new DisabledProxyFinder().find(new HostUrlProvider().get(host)), new DisabledLoginCallback(), new DisabledCancelCallback());
+        session.login(new DisabledLoginCallback(), new DisabledCancelCallback());
         assertFalse(new SDSListService(session, new SDSNodeIdProvider(session)).list(new Path("/", EnumSet.of(Path.Type.directory)), new DisabledListProgressListener()).isEmpty());
     }
 
@@ -161,7 +161,7 @@ public class SDSSessionTest extends AbstractSDSTest {
             }
         }
         // create legacy key pair
-        final UserKeyPair userKeyPair = Crypto.generateUserKeyPair(UserKeyPair.Version.RSA2048, "eth[oh8uv4Eesij");
+        final UserKeyPair userKeyPair = Crypto.generateUserKeyPair(UserKeyPair.Version.RSA2048, PROPERTIES.get("vault.passphrase").toCharArray());
         userApi.setUserKeyPair(TripleCryptConverter.toSwaggerUserKeyPairContainer(userKeyPair), null);
         List<UserKeyPairContainer> keyPairs = userApi.requestUserKeyPairs(null, null);
         assertEquals(1, keyPairs.size());
@@ -169,7 +169,7 @@ public class SDSSessionTest extends AbstractSDSTest {
         session.unlockTripleCryptKeyPair(new DisabledLoginCallback() {
             @Override
             public Credentials prompt(final Host bookmark, final String title, final String reason, final LoginOptions options) throws LoginCanceledException {
-                return new VaultCredentials("eth[oh8uv4Eesij");
+                return new VaultCredentials(PROPERTIES.get("vault.passphrase"));
             }
         }, session.userAccount(), UserKeyPair.Version.RSA4096);
         keyPairs = userApi.requestUserKeyPairs(null, null);

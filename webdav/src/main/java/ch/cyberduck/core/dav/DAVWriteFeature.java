@@ -22,6 +22,7 @@ import ch.cyberduck.core.Path;
 import ch.cyberduck.core.VoidAttributesAdapter;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.ConflictException;
+import ch.cyberduck.core.exception.InteroperabilityException;
 import ch.cyberduck.core.exception.UnsupportedException;
 import ch.cyberduck.core.features.Lock;
 import ch.cyberduck.core.features.Write;
@@ -72,21 +73,29 @@ public class DAVWriteFeature extends AbstractHttpWriteFeature<Void> implements W
     @Override
     public HttpResponseOutputStream<Void> write(final Path file, final TransferStatus status, final ConnectionCallback callback) throws BackgroundException {
         try {
-            return this.write(file, this.getHeaders(file, status), status);
+            return this.write(file, this.toHeaders(file, status, expect), status);
         }
         catch(ConflictException e) {
             if(expect) {
                 if(null != status.getLockId()) {
                     // Handle 412 Precondition Failed with expired token
-                    log.warn(String.format("Retry failure %s with lock id %s removed", e, status.getLockId()));
-                    return this.write(file, this.getHeaders(file, status.withLockId(null)), status);
+                    log.warn("Retry failure {} with lock id {} removed", e, status.getLockId());
+                    return this.write(file, this.toHeaders(file, status.withLockId(null), expect), status);
                 }
+            }
+            throw e;
+        }
+        catch(InteroperabilityException e) {
+            if(expect) {
+                // Handle 417 Expectation Failed
+                log.warn("Retry failure {} with Expect: Continue removed", e.getMessage());
+                return this.write(file, this.toHeaders(file, status.withLockId(null), false), status);
             }
             throw e;
         }
     }
 
-    protected List<Header> getHeaders(final Path file, final TransferStatus status) throws UnsupportedException {
+    protected List<Header> toHeaders(final Path file, final TransferStatus status, final boolean expectdirective) throws UnsupportedException {
         final List<Header> headers = new ArrayList<>();
         if(status.isAppend()) {
             if(status.getLength() == TransferStatus.UNKNOWN_LENGTH) {
@@ -97,19 +106,17 @@ public class DAVWriteFeature extends AbstractHttpWriteFeature<Void> implements W
             // in the full entity-body the partial body should be applied.
             final String header = String.format("bytes %d-%d/%d", range.getStart(), range.getEnd(),
                     status.getOffset() + status.getLength());
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Add range header %s for file %s", header, file));
-            }
+            log.debug("Add range header {} for file {}", header, file);
             headers.add(new BasicHeader(HttpHeaders.CONTENT_RANGE, header));
         }
-        if(expect) {
+        if(expectdirective) {
             if(status.getLength() > 0L) {
                 headers.add(new BasicHeader(HTTP.EXPECT_DIRECTIVE, HTTP.EXPECT_CONTINUE));
             }
         }
         if(session.getFeature(Lock.class) != null && status.getLockId() != null) {
             // Indicate that the client has knowledge of that state token
-            headers.add(new BasicHeader(HttpHeaders.IF, String.format("(<%s>)", status.getLockId())));
+            headers.add(new BasicHeader(HttpHeaders.IF, String.format("<%s> (<%s>)", new DAVPathEncoder().encode(file), status.getLockId())));
         }
         return headers;
     }
@@ -147,13 +154,5 @@ public class DAVWriteFeature extends AbstractHttpWriteFeature<Void> implements W
     @Override
     public EnumSet<Flags> features(final Path file) {
         return EnumSet.of(Flags.random);
-    }
-
-    @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        if(status.getLength() == TransferStatus.UNKNOWN_LENGTH) {
-            return new Append(false).withStatus(status);
-        }
-        return super.append(file, status);
     }
 }

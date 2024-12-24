@@ -29,6 +29,7 @@ import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Optional;
 
 import com.hierynomus.msdtyp.AccessMask;
 import com.hierynomus.msfscc.FileAttributes;
@@ -80,18 +81,20 @@ public class SMBCopyFeature implements Copy {
         finally {
             session.releaseShare(share);
         }
-        return target.withAttributes(new SMBAttributesFinderFeature(session).find(target));
+        return target;
     }
 
     @Override
-    public void preflight(final Path source, final Path target) throws BackgroundException {
+    public void preflight(final Path source, final Optional<Path> target) throws BackgroundException {
         if(source.isVolume()) {
             throw new UnsupportedException(MessageFormat.format(LocaleFactory.localizedString("Cannot copy {0}", "Error"), source.getName())).withFile(source);
         }
         final SMBPathContainerService containerService = new SMBPathContainerService(session);
         // Remote copy is only possible between files on the same server
-        if(!containerService.getContainer(source).equals(containerService.getContainer(target))) {
-            throw new UnsupportedException(MessageFormat.format(LocaleFactory.localizedString("Cannot copy {0}", "Error"), source.getName())).withFile(source);
+        if(target.isPresent()) {
+            if(!containerService.getContainer(source).equals(containerService.getContainer(target.get()))) {
+                throw new UnsupportedException(MessageFormat.format(LocaleFactory.localizedString("Cannot copy {0}", "Error"), source.getName())).withFile(source);
+            }
         }
     }
 }

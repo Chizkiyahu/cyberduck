@@ -20,6 +20,7 @@ import ch.cyberduck.core.BytecountStreamListener;
 import ch.cyberduck.core.ConnectionCallback;
 import ch.cyberduck.core.DisabledConnectionCallback;
 import ch.cyberduck.core.DisabledLoginCallback;
+import ch.cyberduck.core.DisabledProgressListener;
 import ch.cyberduck.core.Local;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathAttributes;
@@ -82,7 +83,7 @@ public class B2LargeUploadServiceTest extends AbstractB2Test {
         final B2LargeUploadService upload = new B2LargeUploadService(session, fileid,
                 new B2WriteFeature(session, fileid), 5 * 1000L * 1000L, 5);
 
-        upload.upload(test, local, new BandwidthThrottle(BandwidthThrottle.UNLIMITED), new DisabledStreamListener(),
+        upload.upload(test, local, new BandwidthThrottle(BandwidthThrottle.UNLIMITED), new DisabledProgressListener(), new DisabledStreamListener(),
                 status, new DisabledConnectionCallback());
         final PathAttributes attr = new B2AttributesFinderFeature(session, fileid).find(test);
         assertNotEquals(Checksum.NONE, attr.getChecksum());
@@ -127,7 +128,7 @@ public class B2LargeUploadServiceTest extends AbstractB2Test {
             }
         };
         try {
-            service.upload(test, new Local(System.getProperty("java.io.tmpdir"), name), new BandwidthThrottle(BandwidthThrottle.UNLIMITED), count, status, new DisabledLoginCallback());
+            service.upload(test, new Local(System.getProperty("java.io.tmpdir"), name), new BandwidthThrottle(BandwidthThrottle.UNLIMITED), new DisabledProgressListener(), count, status, new DisabledLoginCallback());
         }
         catch(BackgroundException e) {
             // Expected
@@ -139,10 +140,10 @@ public class B2LargeUploadServiceTest extends AbstractB2Test {
         assertEquals(TransferStatus.UNKNOWN_LENGTH, status.getResponse().getSize());
         final Write.Append resume = service.append(test, status);
         assertTrue(resume.append);
-        assertEquals(0L, resume.size, 0L);
+        assertEquals(0L, resume.offset, 0L);
         final TransferStatus append = new TransferStatus().append(true).withLength(content.length);
         service.upload(test, local,
-                new BandwidthThrottle(BandwidthThrottle.UNLIMITED), new DisabledStreamListener(), append,
+                new BandwidthThrottle(BandwidthThrottle.UNLIMITED), new DisabledProgressListener(), new DisabledStreamListener(), append,
                 new DisabledLoginCallback());
         assertEquals(content.length, append.getResponse().getSize());
         assertTrue(new B2FindFeature(session, fileid).find(test));
@@ -184,7 +185,7 @@ public class B2LargeUploadServiceTest extends AbstractB2Test {
         };
         final BytecountStreamListener count = new BytecountStreamListener();
         try {
-            feature.upload(test, new Local(System.getProperty("java.io.tmpdir"), name), new BandwidthThrottle(BandwidthThrottle.UNLIMITED), count, status, new DisabledLoginCallback());
+            feature.upload(test, new Local(System.getProperty("java.io.tmpdir"), name), new BandwidthThrottle(BandwidthThrottle.UNLIMITED), new DisabledProgressListener(), count, status, new DisabledLoginCallback());
         }
         catch(BackgroundException e) {
             // Expected
@@ -196,13 +197,13 @@ public class B2LargeUploadServiceTest extends AbstractB2Test {
         assertEquals(TransferStatus.UNKNOWN_LENGTH, status.getResponse().getSize());
         final Write.Append appendStatus = feature.append(test, status);
         assertTrue(appendStatus.append);
-        assertEquals(5 * 1000L * 1000L, appendStatus.size, 0L);
+        assertEquals(5 * 1000L * 1000L, appendStatus.offset, 0L);
         final Path upload = new Path(test).withType(EnumSet.of(Path.Type.file, Path.Type.upload));
         assertTrue(new B2FindFeature(session, fileid).find(upload));
         assertEquals(5 * 1000L * 1000L, new B2AttributesFinderFeature(session, fileid).find(upload).getSize(), 0L);
         final TransferStatus append = new TransferStatus().append(true).withLength(2L * 1000L * 1000L).withOffset(5 * 1000L * 1000L);
         feature.upload(test, local,
-                new BandwidthThrottle(BandwidthThrottle.UNLIMITED), count, append,
+                new BandwidthThrottle(BandwidthThrottle.UNLIMITED), new DisabledProgressListener(), count, append,
                 new DisabledLoginCallback());
         assertEquals(6 * 1000L * 1000L, count.getSent());
         assertTrue(append.isComplete());

@@ -104,6 +104,11 @@ public class TransferStatus implements TransferResponse, StreamCancelation, Stre
     private long length = TransferStatus.UNKNOWN_LENGTH;
 
     /**
+     * Destination size may differ when encrypted or by some other transformation
+     */
+    private long destinationlength = TransferStatus.UNKNOWN_LENGTH;
+
+    /**
      * The transfer has been canceled by the user.
      */
     private final AtomicBoolean canceled
@@ -213,6 +218,7 @@ public class TransferStatus implements TransferResponse, StreamCancelation, Stre
         this.hidden = copy.hidden;
         this.offset.set(copy.offset.get());
         this.length = copy.length;
+        this.destinationlength = copy.destinationlength;
         this.canceled.set(copy.canceled.get());
         this.complete.set(copy.complete.get());
         this.checksum = copy.checksum;
@@ -305,9 +311,7 @@ public class TransferStatus implements TransferResponse, StreamCancelation, Stre
      */
     public void setOffset(final long bytes) {
         offset.set(bytes);
-        if(log.isTraceEnabled()) {
-            log.trace(String.format("Offset set to %d bytes", bytes));
-        }
+        log.trace("Offset set to {} bytes", bytes);
     }
 
     public TransferStatus withOffset(final long bytes) {
@@ -334,6 +338,22 @@ public class TransferStatus implements TransferResponse, StreamCancelation, Stre
      */
     public TransferStatus withLength(final long bytes) {
         this.setLength(bytes);
+        return this;
+    }
+
+    public long getDestinationlength() {
+        if(UNKNOWN_LENGTH == destinationlength) {
+            return length;
+        }
+        return destinationlength;
+    }
+
+    public void setDestinationLength(final long destinationlength) {
+        this.destinationlength = destinationlength;
+    }
+
+    public TransferStatus withDestinationLength(final long destinationlength) {
+        this.destinationlength = destinationlength;
         return this;
     }
 
@@ -508,12 +528,22 @@ public class TransferStatus implements TransferResponse, StreamCancelation, Stre
         this.permission = permission;
     }
 
+    public TransferStatus withPermission(Permission permission) {
+        this.permission = permission;
+        return this;
+    }
+
     public Acl getAcl() {
         return acl;
     }
 
     public void setAcl(Acl acl) {
         this.acl = acl;
+    }
+
+    public TransferStatus withAcl(Acl acl) {
+        this.acl = acl;
+        return this;
     }
 
     public Encryption.Algorithm getEncryption() {
@@ -524,12 +554,22 @@ public class TransferStatus implements TransferResponse, StreamCancelation, Stre
         this.encryption = encryption;
     }
 
+    public TransferStatus withEncryption(final Encryption.Algorithm encryption) {
+        this.encryption = encryption;
+        return this;
+    }
+
     public String getStorageClass() {
         return storageClass;
     }
 
     public void setStorageClass(final String storageClass) {
         this.storageClass = storageClass;
+    }
+
+    public TransferStatus withStorageClass(final String storageClass) {
+        this.storageClass = storageClass;
+        return this;
     }
 
     public Long getModified() {
@@ -721,6 +761,9 @@ public class TransferStatus implements TransferResponse, StreamCancelation, Stre
         sb.append(", region=").append(region);
         sb.append(", part=").append(part);
         sb.append(", filekey=").append(filekey);
+        sb.append(", canceled=").append(canceled);
+        sb.append(", complete=").append(complete);
+        sb.append(", done=").append(done);
         sb.append('}');
         return sb.toString();
     }

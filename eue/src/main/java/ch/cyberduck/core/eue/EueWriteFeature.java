@@ -47,14 +47,11 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.entity.BufferedHttpEntity;
 import org.apache.http.util.EntityUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.util.EnumSet;
 
 public class EueWriteFeature extends AbstractHttpWriteFeature<EueWriteFeature.Chunk> {
-    private static final Logger log = LogManager.getLogger(EueWriteFeature.class);
 
     public static final String RESOURCE_ID = "resourceId";
 
@@ -128,10 +125,10 @@ public class EueWriteFeature extends AbstractHttpWriteFeature<EueWriteFeature.Ch
                             }
                         }
                         catch(HttpResponseException e) {
-                            throw new DefaultHttpResponseExceptionMappingService().map(e);
+                            throw new DefaultHttpResponseExceptionMappingService().map("Upload {0} failed", e, file);
                         }
                         catch(IOException e) {
-                            throw new DefaultIOExceptionMappingService().map(e);
+                            throw new DefaultIOExceptionMappingService().map("Upload {0} failed", e, file);
                         }
                         catch(DecoderException e) {
                             throw new ChecksumException(LocaleFactory.localizedString("Checksum failure", "Error"), e);
@@ -154,13 +151,8 @@ public class EueWriteFeature extends AbstractHttpWriteFeature<EueWriteFeature.Ch
     }
 
     @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        return new Append(false).withStatus(status);
-    }
-
-    @Override
     public EnumSet<Flags> features(final Path file) {
-        return EnumSet.of(Flags.timestamp);
+        return EnumSet.of(Flags.timestamp, Flags.checksum);
     }
 
     public void cancel(final String uploadUri) throws BackgroundException {

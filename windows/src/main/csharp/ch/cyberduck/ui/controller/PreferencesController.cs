@@ -76,6 +76,7 @@ namespace Ch.Cyberduck.Ui.Controller
             View.AlwaysUseDefaultEditorChangedEvent += View_AlwaysUseDefaultEditorChangedEvent;
             View.ShowHiddenFilesChangedEvent += View_ShowHiddenFilesChangedEvent;
             View.DoubleClickEditorChangedEvent += View_DoubleClickEditorChangedEvent;
+            View.EnableVersioningChangedEvent += View_EnableVersioningChangedEvent;
             View.ReturnKeyRenamesChangedEvent += View_ReturnKeyRenamesChangedEvent;
             View.InfoWindowShowsCurrentSelectionChangedEvent += View_InfoWindowShowsCurrentSelectionChangedEvent;
             View.AlternatingRowBackgroundChangedEvent += View_AlternatingRowBackgroundChangedEvent;
@@ -823,6 +824,11 @@ namespace Ch.Cyberduck.Ui.Controller
             PreferencesFactory.get().setProperty("browser.doubleclick.edit", View.DoubleClickEditor);
         }
 
+        private void View_EnableVersioningChangedEvent()
+        {
+            PreferencesFactory.get().setProperty("editor.upload.file.versioning", View.EnableVersioning);
+        }
+
         private void View_ReturnKeyRenamesChangedEvent()
         {
             PreferencesFactory.get().setProperty("browser.enterkey.rename", View.ReturnKeyRenames);
@@ -922,8 +928,8 @@ namespace Ch.Cyberduck.Ui.Controller
             View.ConfirmDisconnect = PreferencesFactory.get().getBoolean("browser.disconnect.confirm");
             View.UseKeychain = PreferencesFactory.get().getBoolean("connection.login.keychain");
             PopulateDefaultProtocols();
-            View.DefaultProtocol =
-                ProtocolFactory.get().forName(PreferencesFactory.get().getProperty("connection.protocol.default"));
+            View.DefaultProtocol = ProtocolFactory.get().forNameOrDefault(
+                PreferencesFactory.get().getProperty("connection.protocol.default"));
             View.AlternatingRowBackground = PreferencesFactory.get().getBoolean("browser.alternatingRows");
             View.VerticalLines = PreferencesFactory.get().getBoolean("browser.verticalLines");
             View.HorizontalLines = PreferencesFactory.get().getBoolean("browser.horizontalLines");
@@ -976,6 +982,7 @@ namespace Ch.Cyberduck.Ui.Controller
 
             PopulateAndSelectEditor();
             View.AlwaysUseDefaultEditor = PreferencesFactory.get().getBoolean("editor.alwaysUseDefault");
+            View.EnableVersioning = PreferencesFactory.get().getBoolean("editor.upload.file.versioning");
 
             #endregion
 
@@ -1401,8 +1408,7 @@ namespace Ch.Cyberduck.Ui.Controller
                             defaultEditor.getName()));
                 }
             }
-            editors.Add(new KeyValueIconTriple<Application, string>(Application.notfound,
-                LocaleFactory.localizedString("Choose") + "…", String.Empty));
+
             View.PopulateEditors(editors);
             if (defaultEditor != null)
             {

@@ -50,6 +50,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -80,11 +81,6 @@ public class BrickMultipartWriteFeature implements MultipartWrite<FileEntity> {
                 return proxy.getResponse();
             }
         };
-    }
-
-    @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        return new Append(false).withStatus(status);
     }
 
     private final class MultipartOutputStream extends OutputStream {
@@ -169,11 +165,11 @@ public class BrickMultipartWriteFeature implements MultipartWrite<FileEntity> {
         public void close() throws IOException {
             try {
                 if(close.get()) {
-                    log.warn(String.format("Skip double close of stream %s", this));
+                    log.warn("Skip double close of stream {}", this);
                     return;
                 }
                 if(null != canceled.get()) {
-                    log.warn(String.format("Skip closing with previous failure %s", canceled.get()));
+                    log.warn("Skip closing with previous failure {}", canceled.get().getMessage());
                     return;
                 }
                 if(null == ref) {
@@ -191,9 +187,7 @@ public class BrickMultipartWriteFeature implements MultipartWrite<FileEntity> {
                     catch(ApiException e) {
                         throw new IOException(e.getMessage(), new BrickExceptionMappingService().map("Upload {0} failed", e, file));
                     }
-                    if(log.isDebugEnabled()) {
-                        log.debug(String.format("Completed multipart upload for %s", file));
-                    }
+                    log.debug("Completed multipart upload for {}", file);
                 }
             }
             catch(BackgroundException e) {
@@ -215,5 +209,10 @@ public class BrickMultipartWriteFeature implements MultipartWrite<FileEntity> {
             sb.append('}');
             return sb.toString();
         }
+    }
+
+    @Override
+    public EnumSet<Flags> features(final Path file) {
+        return EnumSet.of(Flags.timestamp, Flags.checksum);
     }
 }

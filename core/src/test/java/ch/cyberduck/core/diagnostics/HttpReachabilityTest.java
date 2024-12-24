@@ -36,6 +36,9 @@ public class HttpReachabilityTest {
     @Test
     public void testIsReachable() {
         final Reachability r = new HttpReachability();
+        assertFalse(r.isReachable(
+                new Host(new TestProtocol(Scheme.http))
+        ));
         assertTrue(r.isReachable(
                 new Host(new TestProtocol(Scheme.http), "test.cyberduck.io")
         ));
@@ -112,6 +115,17 @@ public class HttpReachabilityTest {
         ));
         assertFalse(r.isReachable(
                 new Host(new TestProtocol(Scheme.https), "cyberduck.io.f")
+        ));
+    }
+
+    @Test
+    public void testHostNoAuthority() {
+        final Reachability r = new HttpReachability();
+        assertFalse(r.isReachable(
+                new Host(new TestProtocol(Scheme.http), "")
+        ));
+        assertFalse(r.isReachable(
+                new Host(new TestProtocol(Scheme.https), "")
         ));
     }
 }

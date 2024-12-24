@@ -83,13 +83,11 @@ public class LoginConnectionService implements ConnectionService {
     @Override
     public boolean check(final Session<?> session, final CancelCallback callback) throws BackgroundException {
         final Host bookmark = session.getHost();
-        if(bookmark.getProtocol().isHostnameConfigurable() && StringUtils.isBlank(bookmark.getHostname())) {
+        if(StringUtils.isBlank(bookmark.getHostname())) {
             throw new ConnectionCanceledException();
         }
         if(session.isConnected()) {
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Skip opening connection for session %s", session));
-            }
+            log.debug("Skip opening connection for session {}", session);
             // Connection already open
             return false;
         }
@@ -118,8 +116,7 @@ public class LoginConnectionService implements ConnectionService {
         // Try to resolve the hostname first
         final String hostname = HostnameConfiguratorFactory.get(bookmark.getProtocol()).getHostname(bookmark.getHostname());
         listener.message(MessageFormat.format(LocaleFactory.localizedString("Resolving {0}", "Status"), hostname));
-        final Proxy proxy = this.proxy.find(new ProxyHostUrlProvider().get(bookmark));
-        if(proxy == Proxy.DIRECT) {
+        if(proxy.find(new ProxyHostUrlProvider().get(bookmark)) == Proxy.DIRECT) {
             // Only try to resolve target hostname if direct connection
             if(null == JumpHostConfiguratorFactory.get(bookmark.getProtocol()).getJumphost(bookmark.getHostname())) {
                 // Do not attempt to resolve hostname that may only be reachable in internal network from jump host
@@ -127,7 +124,7 @@ public class LoginConnectionService implements ConnectionService {
                     resolver.resolve(hostname, cancel);
                 }
                 catch(ResolveFailedException e) {
-                    log.warn(String.format("DNS resolver failed for %s", hostname));
+                    log.warn("DNS resolver failed for {}", hostname);
                     throw e;
                 }
             }
@@ -162,7 +159,7 @@ public class LoginConnectionService implements ConnectionService {
         }
     }
 
-    private void authenticate(final Proxy proxy, final Session session, final CancelCallback callback) throws BackgroundException {
+    private void authenticate(final ProxyFinder proxy, final Session session, final CancelCallback callback) throws BackgroundException {
         if(!login.authenticate(proxy, session, listener, prompt, callback)) {
             if(session.isConnected()) {
                 // Next attempt with updated credentials but cancel when prompt is dismissed

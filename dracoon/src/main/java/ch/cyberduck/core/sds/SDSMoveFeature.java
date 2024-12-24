@@ -15,7 +15,6 @@ package ch.cyberduck.core.sds;
  * GNU General Public License for more details.
  */
 
-import ch.cyberduck.core.CaseInsensitivePathPredicate;
 import ch.cyberduck.core.ConnectionCallback;
 import ch.cyberduck.core.LocaleFactory;
 import ch.cyberduck.core.Path;
@@ -46,6 +45,7 @@ import org.apache.logging.log4j.Logger;
 import java.text.MessageFormat;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Optional;
 
 public class SDSMoveFeature implements Move {
     private static final Logger log = LogManager.getLogger(SDSMoveFeature.class);
@@ -54,7 +54,7 @@ public class SDSMoveFeature implements Move {
     private final SDSNodeIdProvider nodeid;
 
     private final PathContainerService containerService
-        = new SDSPathContainerService();
+            = new SDSPathContainerService();
 
     public SDSMoveFeature(final SDSSession session, final SDSNodeIdProvider nodeid) {
         this.session = session;
@@ -67,20 +67,20 @@ public class SDSMoveFeature implements Move {
             final long nodeId = Long.parseLong(nodeid.getVersionId(file));
             if(containerService.isContainer(file)) {
                 final Node node = new NodesApi(session.getClient()).updateRoom(
-                    new UpdateRoomRequest().name(renamed.getName()), nodeId, StringUtils.EMPTY, null);
+                        new UpdateRoomRequest().name(renamed.getName()), nodeId, StringUtils.EMPTY, null);
                 nodeid.cache(renamed, file.attributes().getVersionId());
                 nodeid.cache(file, null);
                 return renamed.withAttributes(new SDSAttributesAdapter(session).toAttributes(node));
             }
             else {
-                if(status.isExists()) {
-                    // Handle case insensitive. Find feature will have reported target to exist if same name with different case
-                    if(!new CaseInsensitivePathPredicate(file).test(renamed)) {
-                        log.warn(String.format("Delete existing file %s", renamed));
-                        new SDSDeleteFeature(session, nodeid).delete(Collections.singletonMap(renamed, status), connectionCallback, callback);
-                    }
-                }
                 if(new SimplePathPredicate(file.getParent()).test(renamed.getParent())) {
+                    if(status.isExists()) {
+                        // Handle case-insensitive. Find feature will have reported target to exist if same name with different case
+                        if(!nodeid.getVersionId(file).equals(nodeid.getVersionId(renamed))) {
+                            log.warn("Delete existing file {}", renamed);
+                            new SDSDeleteFeature(session, nodeid).delete(Collections.singletonMap(renamed, status), connectionCallback, callback);
+                        }
+                    }
                     // Rename only
                     if(file.isDirectory()) {
                         new NodesApi(session.getClient()).updateFolder(new UpdateFolderRequest().name(renamed.getName()), nodeId, StringUtils.EMPTY, null);
@@ -92,12 +92,12 @@ public class SDSMoveFeature implements Move {
                 else {
                     // Move to different parent
                     new NodesApi(session.getClient()).moveNodes(
-                        new MoveNodesRequest()
-                            .resolutionStrategy(MoveNodesRequest.ResolutionStrategyEnum.OVERWRITE)
-                            .addItemsItem(new MoveNode().id(nodeId).name(renamed.getName()))
-                            .keepShareLinks(new HostPreferences(session.getHost()).getBoolean("sds.upload.sharelinks.keep")),
-                        Long.parseLong(nodeid.getVersionId(renamed.getParent())),
-                        StringUtils.EMPTY, null);
+                            new MoveNodesRequest()
+                                    .resolutionStrategy(MoveNodesRequest.ResolutionStrategyEnum.OVERWRITE)
+                                    .addItemsItem(new MoveNode().id(nodeId).name(renamed.getName()))
+                                    .keepShareLinks(new HostPreferences(session.getHost()).getBoolean("sds.upload.sharelinks.keep")),
+                            Long.parseLong(nodeid.getVersionId(renamed.getParent())),
+                            StringUtils.EMPTY, null);
                 }
                 nodeid.cache(renamed, file.attributes().getVersionId());
                 nodeid.cache(file, null);
@@ -116,45 +116,43 @@ public class SDSMoveFeature implements Move {
     }
 
     @Override
-    public void preflight(final Path source, final Path target) throws BackgroundException {
-        if(containerService.isContainer(source)) {
-            if(!new SimplePathPredicate(source.getParent()).test(target.getParent())) {
-                // Cannot move data room but only rename
-                log.warn(String.format("Deny moving data room %s", source));
+    public void preflight(final Path source, final Optional<Path> target) throws BackgroundException {
+        final SDSPermissionsFeature acl = new SDSPermissionsFeature(session, nodeid);
+        if(target.isPresent()) {
+            if(containerService.isContainer(source)) {
+                if(!new SimplePathPredicate(source.getParent()).test(target.get().getParent())) {
+                    // Cannot move data room but only rename
+                    log.warn("Deny moving data room {}", source);
+                    throw new UnsupportedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
+                }
+            }
+            if(target.get().getParent().isRoot() && !source.getParent().isRoot()) {
+                // Cannot move file or directory to root but only rename data rooms
+                log.warn("Deny moving file {} to root", source);
                 throw new UnsupportedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
             }
-        }
-        if(target.getParent().isRoot() && !source.getParent().isRoot()) {
-            // Cannot move file or directory to root but only rename data rooms
-            log.warn(String.format("Deny moving file %s to root", source));
-            throw new UnsupportedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
-        }
-        if(!SDSTouchFeature.validate(target.getName())) {
-            log.warn(String.format("Validation failed for target name %s", target));
-            throw new InvalidFilenameException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(target);
-        }
-        final SDSPermissionsFeature acl = new SDSPermissionsFeature(session, nodeid);
-        if(!new SimplePathPredicate(source.getParent()).test(target.getParent())) {
-            // Change parent node
-            if(!acl.containsRole(containerService.getContainer(source), SDSPermissionsFeature.CHANGE_ROLE)) {
-                log.warn(String.format("Deny move of %s to %s changing parent node with missing role %s on data room %s",
-                    source, target, SDSPermissionsFeature.CHANGE_ROLE, containerService.getContainer(source)));
-                throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
+            if(!SDSTouchFeature.validate(target.get().getName())) {
+                log.warn("Validation failed for target name {}", target);
+                throw new InvalidFilenameException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), target.get().getName())).withFile(source);
             }
-            if(!acl.containsRole(containerService.getContainer(source), SDSPermissionsFeature.DELETE_ROLE)) {
-                log.warn(String.format("Deny move of %s to %s changing parent node with missing role %s on data room %s",
-                    source, target, SDSPermissionsFeature.DELETE_ROLE, containerService.getContainer(source)));
-                throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
-            }
-            if(!acl.containsRole(containerService.getContainer(target), SDSPermissionsFeature.CREATE_ROLE)) {
-                log.warn(String.format("Deny move of %s to %s changing parent node with missing role %s on data room %s",
-                    source, target, SDSPermissionsFeature.CREATE_ROLE, containerService.getContainer(target)));
-                throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
+            if(!new SimplePathPredicate(source.getParent()).test(target.get().getParent())) {
+                // Change parent node
+                if(!acl.containsRole(containerService.getContainer(source), SDSPermissionsFeature.CHANGE_ROLE)) {
+                    log.warn("Deny move of {} to {} changing parent node with missing role {} on data room {}", source, target, SDSPermissionsFeature.CHANGE_ROLE, containerService.getContainer(source));
+                    throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
+                }
+                if(!acl.containsRole(containerService.getContainer(source), SDSPermissionsFeature.DELETE_ROLE)) {
+                    log.warn("Deny move of {} to {} changing parent node with missing role {} on data room {}", source, target, SDSPermissionsFeature.DELETE_ROLE, containerService.getContainer(source));
+                    throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
+                }
+                if(!acl.containsRole(containerService.getContainer(target.get()), SDSPermissionsFeature.CREATE_ROLE)) {
+                    log.warn("Deny move of {} to {} changing parent node with missing role {} on data room {}", source, target, SDSPermissionsFeature.CREATE_ROLE, containerService.getContainer(target.get()));
+                    throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
+                }
             }
         }
         if(!acl.containsRole(containerService.getContainer(source), SDSPermissionsFeature.CHANGE_ROLE)) {
-            log.warn(String.format("Deny move of %s to %s with missing permissions for user with missing role %s on data room %s",
-                source, target, SDSPermissionsFeature.CHANGE_ROLE, containerService.getContainer(source)));
+            log.warn("Deny move of {} to {} with missing permissions for user with missing role {} on data room {}", source, target, SDSPermissionsFeature.CHANGE_ROLE, containerService.getContainer(source));
             throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
         }
     }

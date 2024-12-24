@@ -22,7 +22,6 @@ package ch.cyberduck.core;
 import ch.cyberduck.core.exception.AccessDeniedException;
 import ch.cyberduck.core.exception.NotfoundException;
 import ch.cyberduck.core.local.DefaultLocalDirectoryFeature;
-import ch.cyberduck.core.local.FileWatcherListener;
 import ch.cyberduck.core.serializer.Reader;
 import ch.cyberduck.core.serializer.Writer;
 
@@ -32,7 +31,7 @@ import org.apache.logging.log4j.Logger;
 import java.util.Comparator;
 import java.util.regex.Pattern;
 
-public abstract class AbstractFolderHostCollection extends AbstractHostCollection implements FileWatcherListener {
+public abstract class AbstractFolderHostCollection extends AbstractHostCollection {
     private static final Logger log = LogManager.getLogger(AbstractFolderHostCollection.class);
 
     private final Writer<Host> writer = HostWriterFactory.get();
@@ -90,26 +89,26 @@ public abstract class AbstractFolderHostCollection extends AbstractHostCollectio
     }
 
     protected void save(final Host bookmark) {
+        this.lock();
         try {
             if(!folder.exists()) {
                 new DefaultLocalDirectoryFeature().mkdir(folder);
             }
             final Local f = this.getFile(bookmark);
-            if(log.isInfoEnabled()) {
-                log.info(String.format("Save bookmark %s to %s", bookmark, f));
-            }
+            log.info("Save bookmark {} to {}", bookmark, f);
             writer.write(bookmark, f);
         }
         catch(AccessDeniedException e) {
-            log.warn(String.format("Failure saving item in collection %s", e.getMessage()));
+            log.warn("Failure saving item in collection {}", e.getMessage());
+        }
+        finally {
+            this.unlock();
         }
     }
 
     @Override
     public void load() throws AccessDeniedException {
-        if(log.isInfoEnabled()) {
-            log.info(String.format("Reloading %s", folder.getAbsolute()));
-        }
+        log.info("Reloading {}", folder.getAbsolute());
         this.lock();
         try {
             if(!folder.exists()) {
@@ -121,7 +120,7 @@ public abstract class AbstractFolderHostCollection extends AbstractHostCollectio
                     this.add(reader.read(f));
                 }
                 catch(AccessDeniedException e) {
-                    log.error(String.format("Failure %s reading bookmark from %s", e, f));
+                    log.error("Failure {} reading bookmark from {}", e, f);
                 }
             }
         }
@@ -153,7 +152,7 @@ public abstract class AbstractFolderHostCollection extends AbstractHostCollectio
                     file.delete();
                 }
                 catch(AccessDeniedException | NotfoundException e) {
-                    log.warn(String.format("Failure removing bookmark %s", e.getMessage()));
+                    log.warn("Failure removing bookmark {}", e.getMessage());
                 }
                 this.sort();
             }

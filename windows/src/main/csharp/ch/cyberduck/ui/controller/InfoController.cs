@@ -52,6 +52,7 @@ using System.Windows.Forms;
 using static Ch.Cyberduck.ImageHelper;
 using Boolean = java.lang.Boolean;
 using Object = System.Object;
+using Optional = java.util.Optional;
 using String = System.String;
 using StringBuilder = System.Text.StringBuilder;
 
@@ -108,6 +109,7 @@ namespace Ch.Cyberduck.Ui.Controller
 
                 _files = value;
 
+                View.Filename = Name;
                 ConfigureToolbar();
                 ConfigureHelp();
                 InitTab(View.ActiveTab);
@@ -817,10 +819,9 @@ namespace Ch.Cyberduck.Ui.Controller
                 DetachGeneralHandlers();
 
                 Path file = _files[0];
-                View.Filename = Name;
-
+                //todo
                 View.FilenameEnabled = (1 == count &&
-                                        ((Move)_controller.Session.getFeature(typeof(Move))).isSupported(file, file));
+                                        ((Move)_controller.Session.getFeature(typeof(Move))).isSupported(file, Optional.empty()));
                 string path;
                 if (file.isSymbolicLink())
                 {
@@ -1449,6 +1450,10 @@ namespace Ch.Cyberduck.Ui.Controller
                         _acceleration = accelerationFeature.getStatus(_container);
                     }
                     catch (InteroperabilityException ex)
+                    {
+                        Log.warn("Ignore failure reading transfer acceleration", ex);
+                    }
+                    catch (ConflictException ex)
                     {
                         Log.warn("Ignore failure reading transfer acceleration", ex);
                     }

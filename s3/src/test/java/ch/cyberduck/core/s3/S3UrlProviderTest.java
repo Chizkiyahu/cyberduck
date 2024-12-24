@@ -1,6 +1,5 @@
 package ch.cyberduck.core.s3;
 
-import ch.cyberduck.core.AbstractPath;
 import ch.cyberduck.core.Credentials;
 import ch.cyberduck.core.DescriptiveUrl;
 import ch.cyberduck.core.DescriptiveUrlBag;
@@ -11,7 +10,7 @@ import ch.cyberduck.core.DisabledPasswordStore;
 import ch.cyberduck.core.Host;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.exception.BackgroundException;
-import ch.cyberduck.core.proxy.Proxy;
+import ch.cyberduck.core.proxy.DisabledProxyFinder;
 import ch.cyberduck.test.IntegrationTest;
 
 import org.junit.Test;
@@ -37,7 +36,7 @@ public class S3UrlProviderTest extends AbstractS3Test {
             @Override
             public RequestEntityRestStorageService getClient() {
                 try {
-                    return this.connect(Proxy.DIRECT, new DisabledHostKeyCallback(), new DisabledLoginCallback(), new DisabledCancelCallback());
+                    return this.connect(new DisabledProxyFinder(), new DisabledHostKeyCallback(), new DisabledLoginCallback(), new DisabledCancelCallback());
                 }
                 catch(BackgroundException e) {
                     fail();
@@ -114,7 +113,7 @@ public class S3UrlProviderTest extends AbstractS3Test {
             @Override
             public RequestEntityRestStorageService getClient() {
                 try {
-                    return this.connect(Proxy.DIRECT, new DisabledHostKeyCallback(), new DisabledLoginCallback(), new DisabledCancelCallback());
+                    return this.connect(new DisabledProxyFinder(), new DisabledHostKeyCallback(), new DisabledLoginCallback(), new DisabledCancelCallback());
                 }
                 catch(BackgroundException e) {
                     fail();
@@ -139,7 +138,7 @@ public class S3UrlProviderTest extends AbstractS3Test {
             @Override
             public RequestEntityRestStorageService getClient() {
                 try {
-                    return this.connect(Proxy.DIRECT, new DisabledHostKeyCallback(), new DisabledLoginCallback(), new DisabledCancelCallback());
+                    return this.connect(new DisabledProxyFinder(), new DisabledHostKeyCallback(), new DisabledLoginCallback(), new DisabledCancelCallback());
                 }
                 catch(BackgroundException e) {
                     fail();
@@ -180,7 +179,7 @@ public class S3UrlProviderTest extends AbstractS3Test {
         });
         final String url = provider.toSignedUrl(new Path("/t", EnumSet.of(Path.Type.file)), 30).getUrl();
         assertTrue(url, url.startsWith(
-            "https://test-eu-west-3-cyberduck.s3.amazonaws.com/t?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential="));
+                "https://test-eu-central-1-cyberduck.s3.amazonaws.com/t?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential="));
     }
 
     @Test

@@ -20,6 +20,7 @@ package ch.cyberduck.core.worker;
 
 import ch.cyberduck.core.LocaleFactory;
 import ch.cyberduck.core.Path;
+import ch.cyberduck.core.PathAttributes;
 import ch.cyberduck.core.Session;
 import ch.cyberduck.core.UserDateFormatterFactory;
 import ch.cyberduck.core.exception.BackgroundException;
@@ -48,13 +49,26 @@ public class WriteTimestampWorker extends Worker<Boolean> {
     @Override
     public Boolean run(final Session<?> session) throws BackgroundException {
         final Timestamp feature = session.getFeature(Timestamp.class);
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Run with feature %s", feature));
+        if(null == feature) {
+            return false;
         }
-        feature.setTimestamp(file, new TransferStatus()
+        log.debug("Run with feature {}", feature);
+        final TransferStatus status = new TransferStatus()
                 .withCreated(created)
                 .withModified(modified)
-                .withLockId(this.getLockId(file)));
+                .withLockId(this.getLockId(file));
+        feature.setTimestamp(file, status);
+        if(!PathAttributes.EMPTY.equals(status.getResponse())) {
+            file.withAttributes(status.getResponse());
+        }
+        else {
+            if(created != null) {
+                file.attributes().setCreationDate(created);
+            }
+            if(modified != null) {
+                file.attributes().setModificationDate(modified);
+            }
+        }
         return true;
     }
 

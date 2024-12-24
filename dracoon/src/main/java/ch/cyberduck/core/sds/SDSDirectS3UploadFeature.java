@@ -21,6 +21,7 @@ import ch.cyberduck.core.DefaultIOExceptionMappingService;
 import ch.cyberduck.core.Local;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathContainerService;
+import ch.cyberduck.core.ProgressListener;
 import ch.cyberduck.core.UUIDRandomStringService;
 import ch.cyberduck.core.concurrency.Interruptibles;
 import ch.cyberduck.core.exception.BackgroundException;
@@ -109,7 +110,7 @@ public class SDSDirectS3UploadFeature extends HttpUploadFeature<Node, MessageDig
     }
 
     @Override
-    public Node upload(final Path file, final Local local, final BandwidthThrottle throttle, final StreamListener listener,
+    public Node upload(final Path file, final Local local, final BandwidthThrottle throttle, final ProgressListener progress, final StreamListener streamListener,
                        final TransferStatus status, final ConnectionCallback callback) throws BackgroundException {
         final ThreadPool pool = ThreadPoolFactory.get("multipart", concurrency);
         try {
@@ -129,9 +130,7 @@ public class SDSDirectS3UploadFeature extends HttpUploadFeature<Node, MessageDig
                     .name(file.getName());
             final CreateFileUploadResponse createFileUploadResponse = new NodesApi(session.getClient())
                     .createFileUploadChannel(createFileUploadRequest, StringUtils.EMPTY);
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("upload started for %s with response %s", file, createFileUploadResponse));
-            }
+            log.debug("upload started for {} with response {}", file, createFileUploadResponse);
             final Map<Integer, TransferStatus> etags = new HashMap<>();
             final List<PresignedUrl> presignedUrls = this.retrievePresignedUrls(createFileUploadResponse, status);
             final List<Future<TransferStatus>> parts = new ArrayList<>();
@@ -146,17 +145,15 @@ public class SDSDirectS3UploadFeature extends HttpUploadFeature<Node, MessageDig
                     final PresignedUrl presignedUrl = presignedUrls.get(partNumber - 1);
                     if(new SDSTripleCryptEncryptorFeature(session, nodeid).isEncrypted(containerService.getContainer(file))) {
                         final Local temporary = temp.create(String.format("%s-%d", random, partNumber));
-                        if(log.isDebugEnabled()) {
-                            log.debug(String.format("Encrypted contents for part %d to %s", partNumber, temporary));
-                        }
+                        log.debug("Encrypted contents for part {} to {}", partNumber, temporary);
                         final FileBuffer buffer = new FileBuffer(temporary);
                         new StreamCopier(status, StreamProgress.noop).withAutoclose(false).withLimit(length)
                                 .transfer(in, new BufferOutputStream(buffer));
-                        parts.add(this.submit(pool, file, temporary, buffer, throttle, listener, status,
+                        parts.add(this.submit(pool, file, temporary, buffer, throttle, streamListener, status,
                                 presignedUrl.getUrl(), presignedUrl.getPartNumber(), 0L, length, callback));
                     }
                     else {
-                        parts.add(this.submit(pool, file, local, Buffer.noop, throttle, listener, status,
+                        parts.add(this.submit(pool, file, local, Buffer.noop, throttle, streamListener, status,
                                 presignedUrl.getUrl(), presignedUrl.getPartNumber(), offset, length, callback));
                     }
                     remaining -= length;
@@ -185,9 +182,7 @@ public class SDSDirectS3UploadFeature extends HttpUploadFeature<Node, MessageDig
             }
             etags.forEach((key, value) -> completeS3FileUploadRequest.addPartsItem(
                     new S3FileUploadPart().partEtag(value.getChecksum().hash).partNumber(key)));
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Complete file upload with %s for %s", completeS3FileUploadRequest, file));
-            }
+            log.debug("Complete file upload with {} for {}", completeS3FileUploadRequest, file);
             new NodesApi(session.getClient()).completeS3FileUpload(completeS3FileUploadRequest, createFileUploadResponse.getUploadId(), StringUtils.EMPTY);
             // Polling
             return new SDSUploadService(session, nodeid).await(file, status, createFileUploadResponse.getUploadId()).getNode();
@@ -199,7 +194,7 @@ public class SDSDirectS3UploadFeature extends HttpUploadFeature<Node, MessageDig
             throw new SDSExceptionMappingService(nodeid).map("Upload {0} failed", e, file);
         }
         catch(IOException e) {
-            throw new DefaultIOExceptionMappingService().map(e);
+            throw new DefaultIOExceptionMappingService().map("Upload {0} failed", e, file);
         }
         finally {
             temp.shutdown();
@@ -243,9 +238,7 @@ public class SDSDirectS3UploadFeature extends HttpUploadFeature<Node, MessageDig
                                           final Buffer buffer, final BandwidthThrottle throttle, final StreamListener listener,
                                           final TransferStatus overall, final String url, final Integer partNumber,
                                           final long offset, final long length, final ConnectionCallback callback) {
-        if(log.isInfoEnabled()) {
-            log.info(String.format("Submit part %d of %s to queue with offset %d and length %d", partNumber, file, offset, length));
-        }
+        log.info("Submit part {} of {} to queue with offset {} and length {}", partNumber, file, offset, length);
         final BytecountStreamListener counter = new BytecountStreamListener(listener);
         return pool.execute(new SegmentRetryCallable<>(session.getHost(), new BackgroundExceptionCallable<TransferStatus>() {
             @Override
@@ -261,9 +254,7 @@ public class SDSDirectS3UploadFeature extends HttpUploadFeature<Node, MessageDig
                 status.setFilekey(overall.getFilekey());
                 final Node node = SDSDirectS3UploadFeature.super.upload(
                         file, local, throttle, counter, status, overall, status, callback);
-                if(log.isInfoEnabled()) {
-                    log.info(String.format("Received response for part number %d", partNumber));
-                }
+                log.info("Received response for part number {}", partNumber);
                 // Delete temporary file if any
                 buffer.close();
                 return status.withChecksum(Checksum.parse(node.getHash()));

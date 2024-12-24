@@ -22,7 +22,6 @@ import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.NotfoundException;
 import ch.cyberduck.core.features.Lock;
 import ch.cyberduck.core.features.Timestamp;
-import ch.cyberduck.core.shared.DefaultTimestampFeature;
 import ch.cyberduck.core.transfer.TransferStatus;
 
 import org.apache.http.HttpHeaders;
@@ -42,7 +41,7 @@ import com.github.sardine.DavResource;
 import com.github.sardine.impl.SardineException;
 import com.github.sardine.util.SardineUtil;
 
-public class DAVTimestampFeature extends DefaultTimestampFeature implements Timestamp {
+public class DAVTimestampFeature implements Timestamp {
 
     private final DAVSession session;
 
@@ -73,7 +72,8 @@ public class DAVTimestampFeature extends DefaultTimestampFeature implements Time
                 final DavResource resource = this.getResource(file);
                 session.getClient().patch(new DAVPathEncoder().encode(file), this.getCustomProperties(resource, status.getModified()), Collections.emptyList(),
                         this.getCustomHeaders(file, status));
-                status.setResponse(new DAVAttributesFinderFeature(session).toAttributes(resource).withModificationDate(status.getModified()));
+                status.setResponse(new DAVAttributesFinderFeature(session).toAttributes(resource).withModificationDate(
+                        Timestamp.toSeconds(status.getModified())));
             }
         }
         catch(SardineException e) {
@@ -90,7 +90,7 @@ public class DAVTimestampFeature extends DefaultTimestampFeature implements Time
      * @param file File
      * @return Latest properties
      */
-    protected DavResource getResource(final Path file) throws NotfoundException, IOException {
+    protected DavResource getResource(final Path file) throws BackgroundException, IOException {
         final Optional<DavResource> optional = new DAVAttributesFinderFeature(session).list(file).stream().findFirst();
         if(!optional.isPresent()) {
             throw new NotfoundException(file.getAbsolute());
@@ -119,7 +119,7 @@ public class DAVTimestampFeature extends DefaultTimestampFeature implements Time
     protected Map<String, String> getCustomHeaders(final Path file, final TransferStatus status) {
         final Map<String, String> headers = new HashMap<>();
         if(session.getFeature(Lock.class) != null && status.getLockId() != null) {
-            headers.put(HttpHeaders.IF, String.format("(<%s>)", status.getLockId()));
+            headers.put(HttpHeaders.IF, String.format("<%s> (<%s>)", new DAVPathEncoder().encode(file), status.getLockId()));
         }
         return headers;
     }

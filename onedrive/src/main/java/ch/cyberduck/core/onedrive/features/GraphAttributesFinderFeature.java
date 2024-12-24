@@ -28,8 +28,6 @@ import ch.cyberduck.core.onedrive.GraphExceptionMappingService;
 import ch.cyberduck.core.onedrive.GraphSession;
 import ch.cyberduck.core.webloc.UrlFileWriterFactory;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.nuxeo.onedrive.client.OneDriveAPIException;
 import org.nuxeo.onedrive.client.types.DriveItem;
 import org.nuxeo.onedrive.client.types.DriveItemVersion;
@@ -37,14 +35,11 @@ import org.nuxeo.onedrive.client.types.FileSystemInfo;
 import org.nuxeo.onedrive.client.types.Publication;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.util.Optional;
 
 
 public class GraphAttributesFinderFeature implements AttributesFinder, AttributesAdapter<DriveItem.Metadata> {
-    private static final Logger log = LogManager.getLogger(GraphAttributesFinderFeature.class);
 
     private final GraphSession session;
     private final GraphFileIdProvider fileid;
@@ -55,14 +50,7 @@ public class GraphAttributesFinderFeature implements AttributesFinder, Attribute
     }
 
     static Optional<DescriptiveUrl> getWebUrl(final DriveItem.Metadata metadata) {
-        DescriptiveUrl url = null;
-        try {
-            url = new DescriptiveUrl(new URI(metadata.getWebUrl()), DescriptiveUrl.Type.http);
-        }
-        catch(URISyntaxException e) {
-            log.warn(String.format("Cannot create URI of WebURL: %s", metadata.getWebUrl()), e);
-        }
-        return Optional.ofNullable(url);
+        return Optional.of(new DescriptiveUrl(metadata.getWebUrl(), DescriptiveUrl.Type.http));
     }
 
     @Override

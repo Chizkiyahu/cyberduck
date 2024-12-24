@@ -47,7 +47,7 @@ import ch.cyberduck.core.profiles.ProfilesWorkerBackgroundAction;
 import ch.cyberduck.core.profiles.SearchProfilePredicate;
 import ch.cyberduck.core.resources.IconCacheFactory;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.rococoa.Foundation;
@@ -181,7 +181,7 @@ public class ProfilesPreferencesController extends BundleController {
                 );
             }
             catch(BackgroundException e) {
-                log.error(String.format("Failure %s retrieving profiles", e));
+                log.error("Failure {} retrieving profiles", e.getMessage());
             }
         }
     }
@@ -244,7 +244,7 @@ public class ProfilesPreferencesController extends BundleController {
         }
 
         @Override
-        public void outlineView_willDisplayCell_forTableColumn_item(final NSOutlineView view, final NSTextFieldCell cell, final NSTableColumn tableColumn, final NSObject item) {
+        public void outlineView_willDisplayCell_forTableColumn_item(final NSOutlineView view, final NSCell cell, final NSTableColumn tableColumn, final NSObject item) {
             //
         }
 

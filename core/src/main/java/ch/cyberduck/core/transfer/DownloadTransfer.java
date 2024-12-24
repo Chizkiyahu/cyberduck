@@ -24,7 +24,6 @@ import ch.cyberduck.core.exception.TransferCanceledException;
 import ch.cyberduck.core.features.AttributesFinder;
 import ch.cyberduck.core.features.Bulk;
 import ch.cyberduck.core.features.Download;
-import ch.cyberduck.core.features.Find;
 import ch.cyberduck.core.filter.DownloadDuplicateFilter;
 import ch.cyberduck.core.filter.DownloadRegexFilter;
 import ch.cyberduck.core.io.BandwidthThrottle;
@@ -34,12 +33,10 @@ import ch.cyberduck.core.local.LocalSymlinkFactory;
 import ch.cyberduck.core.local.features.Symlink;
 import ch.cyberduck.core.preferences.PreferencesFactory;
 import ch.cyberduck.core.shared.DefaultAttributesFinderFeature;
-import ch.cyberduck.core.shared.DefaultFindFeature;
 import ch.cyberduck.core.transfer.download.AbstractDownloadFilter;
 import ch.cyberduck.core.transfer.download.CompareFilter;
 import ch.cyberduck.core.transfer.download.DownloadFilterOptions;
 import ch.cyberduck.core.transfer.download.DownloadRegexPriorityComparator;
-import ch.cyberduck.core.transfer.download.IconUpdateStreamListener;
 import ch.cyberduck.core.transfer.download.OverwriteFilter;
 import ch.cyberduck.core.transfer.download.RenameExistingFilter;
 import ch.cyberduck.core.transfer.download.RenameFilter;
@@ -116,14 +113,10 @@ public class DownloadTransfer extends Transfer {
     @Override
     public List<TransferItem> list(final Session<?> session, final Path directory,
                                    final Local local, final ListProgressListener listener) throws BackgroundException {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("List children for %s", directory));
-        }
+        log.debug("List children for {}", directory);
         if(directory.isSymbolicLink()
                 && new DownloadSymlinkResolver(roots).resolve(directory)) {
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Do not list children for symbolic link %s", directory));
-            }
+            log.debug("Do not list children for symbolic link {}", directory);
             return Collections.emptyList();
         }
         else {
@@ -146,50 +139,41 @@ public class DownloadTransfer extends Transfer {
 
     @Override
     public AbstractDownloadFilter filter(final Session<?> source, final Session<?> destination, final TransferAction action, final ProgressListener listener) {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Filter transfer with action %s and options %s", action, options));
-        }
+        log.debug("Filter transfer with action {} and options {}", action, options);
         final DownloadSymlinkResolver resolver = new DownloadSymlinkResolver(roots);
-        final Find find;
         final AttributesFinder attributes;
         if(roots.size() > 1 || roots.stream().filter(item -> item.remote.isDirectory()).findAny().isPresent()) {
-            find = new CachingFindFeature(source, cache, source.getFeature(Find.class, new DefaultFindFeature(source)));
             attributes = new CachingAttributesFinderFeature(source, cache, source.getFeature(AttributesFinder.class, new DefaultAttributesFinderFeature(source)));
         }
         else {
-            find = new CachingFindFeature(source, cache, source.getFeature(Find.class));
             attributes = new CachingAttributesFinderFeature(source, cache, source.getFeature(AttributesFinder.class));
         }
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Determined features %s and %s", find, attributes));
-        }
+        log.debug("Determined feature {}", attributes);
         if(action.equals(TransferAction.resume)) {
-            return new ResumeFilter(resolver, source, options).withFinder(find).withAttributes(attributes);
+            return new ResumeFilter(resolver, source, attributes, options);
         }
         if(action.equals(TransferAction.rename)) {
-            return new RenameFilter(resolver, source, options).withFinder(find).withAttributes(attributes);
+            return new RenameFilter(resolver, source, attributes, options);
         }
         if(action.equals(TransferAction.renameexisting)) {
-            return new RenameExistingFilter(resolver, source, options).withFinder(find).withAttributes(attributes);
+            return new RenameExistingFilter(resolver, source, attributes, options);
         }
         if(action.equals(TransferAction.skip)) {
-            return new SkipFilter(resolver, source, options).withFinder(find).withAttributes(attributes);
+            return new SkipFilter(resolver, source, attributes, options);
         }
         if(action.equals(TransferAction.trash)) {
-            return new TrashFilter(resolver, source, options).withFinder(find).withAttributes(attributes);
+            return new TrashFilter(resolver, source, attributes, options);
         }
         if(action.equals(TransferAction.comparison)) {
-            return new CompareFilter(resolver, source, options, listener).withFinder(find).withAttributes(attributes);
+            return new CompareFilter(resolver, source, options);
         }
-        return new OverwriteFilter(resolver, source, options).withFinder(find).withAttributes(attributes);
+        return new OverwriteFilter(resolver, source, attributes, options);
     }
 
     @Override
     public TransferAction action(final Session<?> source, final Session<?> destination, final boolean resumeRequested, final boolean reloadRequested,
                                  final TransferPrompt prompt, final ListProgressListener listener) throws BackgroundException {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Find transfer action with prompt %s", prompt));
-        }
+        log.debug("Find transfer action with prompt {}", prompt);
         if(resumeRequested) {
             // Force resume by user or retry of failed transfer
             return TransferAction.resume;
@@ -235,18 +219,14 @@ public class DownloadTransfer extends Transfer {
                     final TransferPathFilter filter, final TransferErrorCallback error, final ProgressListener progress, final ConnectionCallback callback) throws BackgroundException {
         final Bulk<?> feature = source.getFeature(Bulk.class);
         final Object id = feature.pre(Type.download, files, callback);
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Obtained bulk id %s for transfer %s", id, this));
-        }
+        log.debug("Obtained bulk id {} for transfer {}", id, this);
         super.pre(source, destination, files, filter, error, progress, callback);
         for(Map.Entry<TransferItem, TransferStatus> entry : files.entrySet()) {
             final Path file = entry.getKey().remote;
             if(file.isDirectory()) {
                 final TransferStatus status = entry.getValue();
                 if(status.isExists()) {
-                    if(log.isWarnEnabled()) {
-                        log.warn(String.format("Skip existing directory %s", file));
-                    }
+                    log.warn("Skip existing directory {}", file);
                     continue;
                 }
                 final Local local = entry.getKey().local;
@@ -262,7 +242,7 @@ public class DownloadTransfer extends Transfer {
                 catch(AccessDeniedException e) {
                     if(error.prompt(entry.getKey(), status, e, files.size())) {
                         // Continue
-                        log.warn(String.format("Ignore transfer failure %s", e));
+                        log.warn("Ignore transfer failure {}", e.getMessage());
                     }
                     else {
                         throw new TransferCanceledException(e);
@@ -284,12 +264,10 @@ public class DownloadTransfer extends Transfer {
             final Optional<Map.Entry<TransferItem, TransferStatus>> entry = files.entrySet().stream().findFirst();
             if(entry.isPresent()) {
                 final Map.Entry<TransferItem, TransferStatus> item = entry.get();
-                if(log.isWarnEnabled()) {
-                    log.warn(String.format("Prompt with failure %s for item %s only", e, item.getKey()));
-                }
+                log.warn("Prompt with failure {} for item {} only", e, item.getKey());
                 if(error.prompt(item.getKey(), item.getValue(), e, files.size())) {
                     // Continue
-                    log.warn(String.format("Ignore transfer failure %s", e));
+                    log.warn("Ignore transfer failure {}", e.getMessage());
                 }
                 else {
                     throw new TransferCanceledException(e);
@@ -300,26 +278,22 @@ public class DownloadTransfer extends Transfer {
 
     @Override
     public void transfer(final Session<?> source, final Session<?> destination, final Path file, final Local local, final TransferOptions options,
-                         final TransferStatus overall, final TransferStatus segment, final ConnectionCallback connectionCallback,
-                         final ProgressListener listener, final StreamListener streamListener) throws BackgroundException {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Transfer file %s with options %s and status %s", file, options, segment));
-        }
+                         final TransferStatus segment, final ConnectionCallback prompt,
+                         final ProgressListener progress, final StreamListener listener) throws BackgroundException {
+        log.debug("Transfer file {} with options {} and status {}", file, options, segment);
         if(file.isSymbolicLink()) {
             if(symlinkResolver.resolve(file)) {
                 // Make relative symbolic link
                 final String target = symlinkResolver.relativize(file.getAbsolute(),
                         file.getSymlinkTarget().getAbsolute());
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Create symbolic link from %s to %s", local, target));
-                }
+                log.debug("Create symbolic link from {} to {}", local, target);
                 final Symlink symlink = LocalSymlinkFactory.get();
                 symlink.symlink(local, target);
                 return;
             }
         }
         if(file.isFile()) {
-            listener.message(MessageFormat.format(LocaleFactory.localizedString("Downloading {0}", "Status"),
+            progress.message(MessageFormat.format(LocaleFactory.localizedString("Downloading {0}", "Status"),
                     file.getName()));
             final Local folder = local.getParent();
             if(!folder.exists()) {
@@ -327,8 +301,7 @@ public class DownloadTransfer extends Transfer {
             }
             // Transfer
             final Download download = source.getFeature(Download.class);
-            download.download(file, local, bandwidth, this.options.icon && segment.getLength() > PreferencesFactory.get().getLong("queue.download.icon.threshold") && !overall.isSegmented() ?
-                    new IconUpdateStreamListener(streamListener, segment, local) : streamListener, segment, connectionCallback);
+            download.download(file, local, bandwidth, listener, segment, prompt);
         }
     }
 

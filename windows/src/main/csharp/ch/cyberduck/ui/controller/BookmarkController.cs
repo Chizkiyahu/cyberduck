@@ -107,6 +107,7 @@ namespace Ch.Cyberduck.Ui.Controller
             InitTimezones();
             InitTransferModes();
             Update();
+            ReadPasswordFromKeychain();
 
             View.ChangedProtocolEvent += View_ChangedProtocolEvent;
             View.ChangedProtocolEvent += ReadPasswordFromKeychain;
@@ -160,10 +161,7 @@ namespace Ch.Cyberduck.Ui.Controller
                 {
                     return;
                 }
-                string password = _keychain.getPassword(_host.getProtocol().getScheme(),
-                    _host.getPort(),
-                    _host.getHostname(),
-                    _host.getCredentials().getUsername());
+                string password = _keychain.findLoginPassword(_host);
                 if (!string.IsNullOrWhiteSpace(password))
                 {
                     View.Password = password;
@@ -203,8 +201,11 @@ namespace Ch.Cyberduck.Ui.Controller
                 try
                 {
                     Host parsed = HostParser.parse(input);
+                    if (!_host.getProtocol().getScheme().equals(parsed.getProtocol().getScheme()))
+                    {
+                        _host.setProtocol(parsed.getProtocol());
+                    }
                     _host.setHostname(parsed.getHostname());
-                    _host.setProtocol(parsed.getProtocol());
                     _host.setPort(parsed.getPort());
                     _host.setDefaultPath(parsed.getDefaultPath());
                 }
@@ -252,7 +253,7 @@ namespace Ch.Cyberduck.Ui.Controller
             View.HostFieldEnabled = _host.getProtocol().isHostnameConfigurable();
             View.Nickname = BookmarkNameProvider.toString(_host);
             View.DownloadFolder = new DownloadDirectoryFinder().find(_host).getAbsolute();
-            View.URL = new HostUrlProvider(true, true).get(_host);
+            View.URL = new HostUrlProvider(false, true).get(_host);
             View.Port = _host.getPort().ToString();
             View.PortFieldEnabled = _host.getProtocol().isPortConfigurable();
             View.PathFieldEnabled = _host.getProtocol().isPathConfigurable();
@@ -599,24 +600,11 @@ namespace Ch.Cyberduck.Ui.Controller
             }
             else
             {
-                _host.setPort(selected.getDefaultPort());
-                if (!_host.getProtocol().isHostnameConfigurable())
-                {
-                    // Previously selected protocol had a default hostname. Change to default
-                    // of newly selected protocol.
-                    _host.setHostname(selected.getDefaultHostname());
-                }
-
-                if (!selected.isHostnameConfigurable())
-                {
-                    // Hostname of newly selected protocol is not configurable. Change to default.
-                    _host.setHostname(selected.getDefaultHostname());
-                }
-
-                if (Utils.IsNotBlank(selected.getDefaultHostname()))
+                var hostname = HostnameConfiguratorFactory.get(selected).getHostname(selected.getDefaultHostname());
+                if (Utils.IsNotBlank(hostname))
                 {
                     // Prefill with default hostname
-                    _host.setHostname(selected.getDefaultHostname());
+                    _host.setHostname(hostname);
                 }
 
                 if (Objects.equals(_host.getDefaultPath(), _host.getProtocol().getDefaultPath()) ||
@@ -626,13 +614,8 @@ namespace Ch.Cyberduck.Ui.Controller
                 }
 
                 _host.setProtocol(selected);
-                int port = HostnameConfiguratorFactory.get(selected).getPort(_host.getHostname());
-                if (port != -1)
-                {
-                    // External configuration found
-                    _host.setPort(port);
-                }
-
+                _host.setPort(HostnameConfiguratorFactory.get(selected).getPort(_host.getHostname()));
+                _host.setCredentials(CredentialsConfiguratorFactory.get(selected).configure(_host));
                 _options.configure(selected);
                 _validator.configure(selected);
                 ItemChanged();

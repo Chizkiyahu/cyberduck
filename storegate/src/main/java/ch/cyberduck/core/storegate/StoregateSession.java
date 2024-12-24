@@ -38,7 +38,7 @@ import ch.cyberduck.core.oauth.OAuth2ErrorResponseInterceptor;
 import ch.cyberduck.core.oauth.OAuth2RequestInterceptor;
 import ch.cyberduck.core.preferences.HostPreferences;
 import ch.cyberduck.core.preferences.PreferencesReader;
-import ch.cyberduck.core.proxy.Proxy;
+import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.ssl.X509KeyManager;
 import ch.cyberduck.core.ssl.X509TrustManager;
 import ch.cyberduck.core.storegate.io.swagger.client.ApiException;
@@ -73,6 +73,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 
@@ -80,7 +81,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
-import com.migcomponents.migbase64.Base64;
 
 import static ch.cyberduck.core.oauth.OAuth2AuthorizationService.CYBERDUCK_REDIRECT_URI;
 import static com.google.api.client.json.Json.MEDIA_TYPE;
@@ -98,14 +98,14 @@ public class StoregateSession extends HttpSession<StoregateApiClient> {
     }
 
     @Override
-    protected StoregateApiClient connect(final Proxy proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) throws ConnectionCanceledException {
+    protected StoregateApiClient connect(final ProxyFinder proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) throws ConnectionCanceledException {
         final HttpClientBuilder configuration = builder.build(proxy, this, prompt);
         final PreferencesReader preferences = new HostPreferences(host);
         authorizationService = new OAuth2RequestInterceptor(builder.build(proxy, this, prompt).addInterceptorLast(new HttpRequestInterceptor() {
             @Override
             public void process(final HttpRequest request, final HttpContext context) {
                 request.addHeader(HttpHeaders.AUTHORIZATION,
-                        String.format("Basic %s", Base64.encodeToString(String.format("%s:%s", host.getProtocol().getOAuthClientId(), host.getProtocol().getOAuthClientSecret()).getBytes(StandardCharsets.UTF_8), false)));
+                        String.format("Basic %s", Base64.getEncoder().encodeToString(String.format("%s:%s", host.getProtocol().getOAuthClientId(), host.getProtocol().getOAuthClientSecret()).getBytes(StandardCharsets.UTF_8))));
             }
         }).build(), host, prompt)
                 .withRedirectUri(CYBERDUCK_REDIRECT_URI.equals(host.getProtocol().getOAuthRedirectUrl()) ? host.getProtocol().getOAuthRedirectUrl() :
@@ -136,7 +136,7 @@ public class StoregateSession extends HttpSession<StoregateApiClient> {
     }
 
     @Override
-    public void login(final Proxy proxy, final LoginCallback controller, final CancelCallback cancel) throws BackgroundException {
+    public void login(final LoginCallback controller, final CancelCallback cancel) throws BackgroundException {
         final Credentials credentials = authorizationService.validate();
         try {
             final HttpRequestBase request = new HttpPost(
@@ -153,14 +153,12 @@ public class StoregateSession extends HttpSession<StoregateApiClient> {
                             if(element.isJsonObject()) {
                                 final JsonObject json = element.getAsJsonObject();
                                 final URI url = URI.create(json.getAsJsonPrimitive("web_url_api").getAsString());
-                                if(log.isInfoEnabled()) {
-                                    log.info(String.format("Set base path to %s", url));
-                                }
+                                log.info("Set base path to {}", url);
                                 client.setBasePath(StringUtils.removeEnd(url.toString(), String.valueOf(Path.DELIMITER)));
                             }
                         }
                         catch(JsonParseException | IllegalArgumentException e) {
-                            log.warn(String.format("Ignore failure %s", e));
+                            log.warn("Ignore failure {}", e.toString());
                         }
                         break;
                     case HttpStatus.SC_FORBIDDEN:
@@ -178,9 +176,7 @@ public class StoregateSession extends HttpSession<StoregateApiClient> {
             }
             // Get username
             final ExtendedUser me = new UsersApi(client).usersGetMe();
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Authenticated for user %s", me));
-            }
+            log.debug("Authenticated for user {}", me);
             credentials.setUsername(me.getUsername());
             // Get root folders
             roots = new SettingsApi(client).settingsGetRootfolders();
@@ -216,7 +212,7 @@ public class StoregateSession extends HttpSession<StoregateApiClient> {
             return (T) new StoregateReadFeature(this, fileid);
         }
         if(type == Write.class) {
-            return (T) new StoregateWriteFeature(this, fileid);
+            return (T) new StoregateThresholdWriteFeature(this, fileid);
         }
         if(type == MultipartWrite.class) {
             return (T) new StoregateMultipartWriteFeature(this, fileid);

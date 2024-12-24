@@ -19,13 +19,13 @@
     <parent>
         <artifactId>parent</artifactId>
         <groupId>ch.cyberduck</groupId>
-        <version>8.8.1</version>
+        <version>9.1.2-SNAPSHOT</version>
     </parent>
     <artifactId>backblaze</artifactId>
     <packaging>jar</packaging>
 
     <properties>
-        <b2-version>2.0.24</b2-version>
+        <b2-version>2.1.0</b2-version>
     </properties>
 
     <dependencyManagement>

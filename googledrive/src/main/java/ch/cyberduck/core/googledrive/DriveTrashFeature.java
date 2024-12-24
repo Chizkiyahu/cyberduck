@@ -22,7 +22,7 @@ import ch.cyberduck.core.SimplePathPredicate;
 import ch.cyberduck.core.exception.AccessDeniedException;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.UnsupportedException;
-import ch.cyberduck.core.features.Delete;
+import ch.cyberduck.core.features.Trash;
 import ch.cyberduck.core.preferences.HostPreferences;
 import ch.cyberduck.core.transfer.TransferStatus;
 
@@ -37,7 +37,7 @@ import java.util.Map;
 
 import com.google.api.services.drive.model.File;
 
-public class DriveTrashFeature implements Delete {
+public class DriveTrashFeature implements Trash {
     private static final Logger log = LogManager.getLogger(DriveTrashFeature.class);
 
     private final DriveSession session;
@@ -52,7 +52,7 @@ public class DriveTrashFeature implements Delete {
     public void delete(final Map<Path, TransferStatus> files, final PasswordCallback prompt, final Callback callback) throws BackgroundException {
         for(Path f : files.keySet()) {
             if(f.isPlaceholder()) {
-                log.warn(String.format("Ignore placeholder %s", f));
+                log.warn("Ignore placeholder {}", f);
                 continue;
             }
             try {
@@ -61,7 +61,7 @@ public class DriveTrashFeature implements Delete {
                 }
                 else {
                     if(f.attributes().isHidden()) {
-                        log.warn(String.format("Delete file %s already in trash", f));
+                        log.warn("Delete file {} already in trash", f);
                         new DriveDeleteFeature(session, fileid).delete(Collections.singletonList(f), prompt, callback);
                         continue;
                     }

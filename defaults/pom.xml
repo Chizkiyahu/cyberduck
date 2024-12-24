@@ -19,7 +19,7 @@
     <parent>
         <artifactId>parent</artifactId>
         <groupId>ch.cyberduck</groupId>
-        <version>8.8.1</version>
+        <version>9.1.2-SNAPSHOT</version>
     </parent>
     <artifactId>defaults</artifactId>
 
@@ -30,11 +30,6 @@
     <profiles>
         <profile>
             <id>debug</id>
-            <activation>
-                <property>
-                    <name>!env.JENKINS_HOME</name>
-                </property>
-            </activation>
             <properties>
                 <configuration>debug</configuration>
             </properties>

@@ -22,9 +22,7 @@ import ch.cyberduck.core.ConnectionCallback;
 import ch.cyberduck.core.Header;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathContainerService;
-import ch.cyberduck.core.exception.AccessDeniedException;
 import ch.cyberduck.core.exception.BackgroundException;
-import ch.cyberduck.core.exception.InteroperabilityException;
 import ch.cyberduck.core.features.Encryption;
 import ch.cyberduck.core.features.Write;
 import ch.cyberduck.core.http.AbstractHttpWriteFeature;
@@ -44,8 +42,6 @@ import org.apache.http.HttpEntity;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jets3t.service.ServiceException;
-import org.jets3t.service.model.MultipartPart;
-import org.jets3t.service.model.MultipartUpload;
 import org.jets3t.service.model.S3Object;
 import org.jets3t.service.model.StorageObject;
 
@@ -54,7 +50,6 @@ import java.io.InputStream;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -66,7 +61,7 @@ public class S3WriteFeature extends AbstractHttpWriteFeature<StorageObject> impl
     private final S3Session session;
 
     public S3WriteFeature(final S3Session session, final S3AccessControlListFeature acl) {
-        super(new S3AttributesAdapter());
+        super(new S3AttributesAdapter(session.getHost()));
         this.session = session;
         this.containerService = session.getFeature(PathContainerService.class);
         this.acl = acl;
@@ -83,9 +78,7 @@ public class S3WriteFeature extends AbstractHttpWriteFeature<StorageObject> impl
                     final Path bucket = containerService.getContainer(file);
                     client.putObjectWithRequestEntityImpl(
                             bucket.isRoot() ? StringUtils.EMPTY : bucket.getName(), object, entity, status.getParameters());
-                    if(log.isDebugEnabled()) {
-                        log.debug(String.format("Saved object %s with checksum %s", file, object.getETag()));
-                    }
+                    log.debug("Saved object {} with checksum {}", file, object.getETag());
                 }
                 catch(ServiceException e) {
                     throw new S3ExceptionMappingService().map("Upload {0} failed", e, file);
@@ -115,7 +108,9 @@ public class S3WriteFeature extends AbstractHttpWriteFeature<StorageObject> impl
             switch(checksum.algorithm) {
                 case sha256:
                     if(!status.isSegment()) {
-                        object.addMetadata("x-amz-checksum-sha256", checksum.base64);
+                        if(new HostPreferences(session.getHost()).getBoolean("s3.upload.checksum.header")) {
+                            object.addMetadata("x-amz-checksum-sha256", checksum.base64);
+                        }
                     }
                     object.addMetadata("x-amz-content-sha256", checksum.hash);
                     break;
@@ -134,9 +129,7 @@ public class S3WriteFeature extends AbstractHttpWriteFeature<StorageObject> impl
         }
         if(!Acl.EMPTY.equals(status.getAcl())) {
             if(status.getAcl().isCanned()) {
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Set canned ACL %s for %s", status.getAcl(), file));
-                }
+                log.debug("Set canned ACL {} for {}", status.getAcl(), file);
                 object.setAcl(acl.toAcl(status.getAcl()));
                 // Reset in status to skip setting ACL in upload filter already applied as canned ACL
                 status.setAcl(Acl.EMPTY);
@@ -159,29 +152,8 @@ public class S3WriteFeature extends AbstractHttpWriteFeature<StorageObject> impl
     }
 
     @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        if(new HostPreferences(session.getHost()).getBoolean("s3.upload.multipart")) {
-            try {
-                final S3DefaultMultipartService multipartService = new S3DefaultMultipartService(session);
-                final List<MultipartUpload> upload = multipartService.find(file);
-                if(!upload.isEmpty()) {
-                    Long size = 0L;
-                    for(MultipartPart completed : multipartService.list(upload.iterator().next())) {
-                        size += completed.getSize();
-                    }
-                    return new Append(true).withStatus(status).withSize(size);
-                }
-            }
-            catch(AccessDeniedException | InteroperabilityException e) {
-                log.warn(String.format("Ignore failure listing incomplete multipart uploads. %s", e));
-            }
-        }
-        return Write.override;
-    }
-
-    @Override
     public EnumSet<Flags> features(final Path file) {
-        return EnumSet.of(Flags.timestamp);
+        return EnumSet.of(Flags.timestamp, Flags.checksum, Flags.acl, Flags.mime);
     }
 
     @Override

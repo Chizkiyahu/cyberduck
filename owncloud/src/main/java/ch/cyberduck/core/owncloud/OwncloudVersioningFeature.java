@@ -17,9 +17,9 @@ package ch.cyberduck.core.owncloud;
 
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathNormalizer;
+import ch.cyberduck.core.URIEncoder;
 import ch.cyberduck.core.dav.DAVExceptionMappingService;
 import ch.cyberduck.core.dav.DAVPathEncoder;
-import ch.cyberduck.core.dav.DAVSession;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.http.HttpExceptionMappingService;
 import ch.cyberduck.core.nextcloud.NextcloudHomeFeature;
@@ -28,17 +28,16 @@ import ch.cyberduck.core.nextcloud.NextcloudVersioningFeature;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
-import java.util.List;
+import java.util.EnumSet;
 
 import com.github.sardine.DavResource;
 import com.github.sardine.impl.SardineException;
-import com.github.sardine.model.Propfind;
 
 public class OwncloudVersioningFeature extends NextcloudVersioningFeature {
 
-    private final DAVSession session;
+    private final OwncloudSession session;
 
-    public OwncloudVersioningFeature(final DAVSession session) {
+    public OwncloudVersioningFeature(final OwncloudSession session) {
         super(session);
         this.session = session;
     }
@@ -46,9 +45,7 @@ public class OwncloudVersioningFeature extends NextcloudVersioningFeature {
     @Override
     public void revert(final Path file) throws BackgroundException {
         try {
-            session.getClient().copy(String.format("%s/%s/v/%s",
-                            new OwncloudHomeFeature(session.getHost()).find(NextcloudHomeFeature.Context.versions).getAbsolute(),
-                            file.attributes().getFileId(), file.attributes().getVersionId()),
+            session.getClient().copy(URIEncoder.encode(file.getAbsolute()),
                     new DAVPathEncoder().encode(file));
         }
         catch(SardineException e) {
@@ -68,9 +65,8 @@ public class OwncloudVersioningFeature extends NextcloudVersioningFeature {
     }
 
     @Override
-    protected List<DavResource> propfind(final Path file, final Propfind body) throws IOException {
-        return session.getClient().propfind(String.format("%s/%s/v",
-                new OwncloudHomeFeature(session.getHost()).find(NextcloudHomeFeature.Context.versions).getAbsolute(),
-                file.attributes().getFileId()), 1, body);
+    protected Path versions(final Path file) throws IOException, BackgroundException {
+        return new Path(new OwncloudHomeFeature(session.getHost()).find(NextcloudHomeFeature.Context.meta),
+                String.format("%s/v", file.attributes().getFileId()), EnumSet.of(Path.Type.directory));
     }
 }

@@ -37,8 +37,7 @@ import ch.cyberduck.core.http.UserAgentHttpRequestInitializer;
 import ch.cyberduck.core.oauth.OAuth2ErrorResponseInterceptor;
 import ch.cyberduck.core.oauth.OAuth2RequestInterceptor;
 import ch.cyberduck.core.preferences.HostPreferences;
-import ch.cyberduck.core.proxy.Proxy;
-import ch.cyberduck.core.proxy.ProxyFactory;
+import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.ssl.X509KeyManager;
 import ch.cyberduck.core.ssl.X509TrustManager;
 import ch.cyberduck.core.threading.CancelCallback;
@@ -50,11 +49,8 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 
-import com.google.api.client.http.HttpBackOffUnsuccessfulResponseHandler;
-import com.google.api.client.http.HttpRequest;
 import com.google.api.client.http.apache.v2.ApacheHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
-import com.google.api.client.util.ExponentialBackOff;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.model.About;
 
@@ -71,9 +67,9 @@ public class DriveSession extends HttpSession<Drive> {
     }
 
     @Override
-    protected Drive connect(final Proxy proxy, final HostKeyCallback callback, final LoginCallback prompt, final CancelCallback cancel) throws HostParserException, ConnectionCanceledException {
+    protected Drive connect(final ProxyFinder proxy, final HostKeyCallback callback, final LoginCallback prompt, final CancelCallback cancel) throws HostParserException, ConnectionCanceledException {
         final HttpClientBuilder configuration = builder.build(proxy, this, prompt);
-        authorizationService = new OAuth2RequestInterceptor(builder.build(ProxyFactory.get().find(host.getProtocol().getOAuthAuthorizationUrl()), this, prompt).build(), host, prompt)
+        authorizationService = new OAuth2RequestInterceptor(builder.build(proxy, this, prompt).build(), host, prompt)
                 .withRedirectUri(host.getProtocol().getOAuthRedirectUrl());
         configuration.addInterceptorLast(authorizationService);
         configuration.setServiceUnavailableRetryStrategy(new CustomServiceUnavailableRetryStrategy(host,
@@ -90,24 +86,8 @@ public class DriveSession extends HttpSession<Drive> {
                 .build();
     }
 
-    /**
-     * Retry with backoff for any server error reply
-     */
-    private static final class GoogleDriveHttpRequestInitializer extends UserAgentHttpRequestInitializer {
-        public GoogleDriveHttpRequestInitializer(final UseragentProvider provider) {
-            super(provider);
-        }
-
-        @Override
-        public void initialize(final HttpRequest request) {
-            super.initialize(request);
-            request.setUnsuccessfulResponseHandler(new HttpBackOffUnsuccessfulResponseHandler(new ExponentialBackOff())
-                    .setBackOffRequired(HttpBackOffUnsuccessfulResponseHandler.BackOffRequired.ON_SERVER_ERROR));
-        }
-    }
-
     @Override
-    public void login(final Proxy proxy, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
+    public void login(final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
         final Credentials credentials = authorizationService.validate();
         final About about;
         try {
@@ -116,9 +96,7 @@ public class DriveSession extends HttpSession<Drive> {
         catch(IOException e) {
             throw new DriveExceptionMappingService(fileid).map(e);
         }
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Authenticated as user %s", about.getUser()));
-        }
+        log.debug("Authenticated as user {}", about.getUser());
         credentials.setUsername(about.getUser().getEmailAddress());
     }
 

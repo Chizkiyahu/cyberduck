@@ -16,6 +16,7 @@ package ch.cyberduck.core.diagnostics;
  */
 
 import ch.cyberduck.core.Host;
+import ch.cyberduck.core.exception.BackgroundException;
 
 public class ChainedReachability extends DisabledReachability {
 
@@ -25,14 +26,10 @@ public class ChainedReachability extends DisabledReachability {
         this.delegates = delegates;
     }
 
-
     @Override
-    public boolean isReachable(final Host bookmark) {
+    public void test(final Host bookmark) throws BackgroundException {
         for(Reachability delegate : delegates) {
-            if(!delegate.isReachable(bookmark)) {
-                return false;
-            }
+            delegate.test(bookmark);
         }
-        return true;
     }
 }

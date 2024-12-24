@@ -1,6 +1,64 @@
 Cyberduck
 https://cyberduck.io/
 
+9.1.1
+- [Bugfix] Repeated prompts for passphrase (Cryptomator, Windows) (#16645)
+- [Bugfix] Missing list of buckets (Linode Object Storage) (#16659)
+- [Bugfix] Enable encryption by default (SMB) (#16678)
+- [Bugfix] Application fails to execute and exits with no error message (CLI) (#16683)
+
+9.1.0
+- [Feature] Display transfer progress in Finder for downloads and uploads (macOS) (#16568)
+- [Feature] Show indeterminate progress when concatenating segments after download transfer (#13610)
+- [Feature] Show indeterminate progress when waiting for large file upload to complete (Backblaze B2, Box, OpenStack Swift, S3)
+- [Bugfix] Multipart uploads fail to buckets with '.' character in name (S3) (#16401)
+- [Bugfix] Usability improvements entering connection details (#15200)
+- [Bugfix] Set "Show Hidden Files"shortcut to "⌘ ⇧ ." as in Finder (macOS) (#16459)
+- [Bugfix] Do not require GroupMember.Read.All permission (Microsoft OneDrive, SharePoint) (#16564)
+- [Bugfix] Do not require storage.buckets.list permission to access bucket (Google Storage) (#16565)
+- [Bugfix] Test credentials using sts:GetCallerIdentity (AWS S3) (#16565)
+- [Bugfix] Cannot exclude files in transfer prompt for existing files (macOS) (#16503)
+- [Bugfix] Files not removed in vault when deleting folder (Cryptomator) (Box, Dropbox, Google Drive, OneDrive, WebDAV, SMB) (#14101)
+- [Bugfix] Access files with double-byte character in key (S3) (#13407)
+- [Bugfix] Failure uploading nested folders to vault (Cryptomator) (Azure, Backblaze B2, Google Storage, OpenStack Swift) (#15489)
+- [Bugfix] Error copying files between vaults (Cryptomator) (#15422)
+
+9.0.3
+- [Bugfix] Registration key prompt in browser window regardless of registration (Windows) (#16326)
+
+9.0.2
+- [Feature] Support for Canada West (Calgary) region (S3) (#16215)
+- [Feature] Support for Asia Pacific (Melbourne) region (S3)
+- [Feature] Support for Israel (Tel Aviv) region (S3)
+- [Feature] Support for Asia Pacific (Kuala Lumpur) region (S3)
+- [Bugfix] No accessible elements in list of bookmarks (macOS) (#10853)
+- [Bugfix] Unable to enter device serial number for MFA delete (S3) (#16267)
+
+9.0.1
+- [Bugfix] Auto detect of vaults not always working (Cryptomator)
+- [Bugfix] Missing server prompts before transfer (Windows) (#16140, #16113)
+- [Bugfix] Hang on reopening Transfer window when transfer in progress (Windows) (#16147)
+- [Bugfix] Crash when selected default protocol doesn’t exist (Windows) (#16115)
+
+9.0.0
+- [Feature] Versioning of files edited in external application (#15137)
+- [Feature] Custom icons for protocols (Nextcloud, ownCloud)
+- [Feature] Detect proxy configuration change for already open connections (#13274)
+- [Feature] Rewrite implementation of Transfers window (Windows) (#15885)
+- [Bugfix] Failure retrieving previous versions of file (ownCloud)
+- [Bugfix] Missing shared folders (OneDrive Business) (#16036)
+
+8.9.0
+- [Feature] Resumable file uploads (ownCloud) (#15619)
+- [Feature] Support authentication using SSH certificates (SFTP) (#15183)
+- [Bugfix] Failure sharing file (ownCloud) (#15855, #15839)
+- [Bugfix] Disable signing and encryption by default (SMB) (#15817)
+- [Bugfix] NTLM authentication failures (WebDAV, SharePoint) (#15127)
+
+8.8.2
+- [Bugfix] Slower file transfers caused by connections per host limit (#15737)
+- [Bugfix] Unable to edit HTTP header metadata (S3) (#15742)
+
 8.8.1
 - [Bugfix] Mismatch with Content-MD5 for multipart uploads to vault (S3, Cryptomator) (#15704)
 

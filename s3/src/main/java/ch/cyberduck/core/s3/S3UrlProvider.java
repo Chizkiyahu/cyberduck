@@ -17,19 +17,7 @@ package ch.cyberduck.core.s3;
  * Bug fixes, suggestions and comments should be sent to feedback@cyberduck.ch
  */
 
-import ch.cyberduck.core.DescriptiveUrl;
-import ch.cyberduck.core.DescriptiveUrlBag;
-import ch.cyberduck.core.HostPasswordStore;
-import ch.cyberduck.core.HostWebUrlProvider;
-import ch.cyberduck.core.LocaleFactory;
-import ch.cyberduck.core.PasswordStoreFactory;
-import ch.cyberduck.core.Path;
-import ch.cyberduck.core.PathContainerService;
-import ch.cyberduck.core.Scheme;
-import ch.cyberduck.core.SimplePathPredicate;
-import ch.cyberduck.core.URIEncoder;
-import ch.cyberduck.core.UrlProvider;
-import ch.cyberduck.core.UserDateFormatterFactory;
+import ch.cyberduck.core.*;
 import ch.cyberduck.core.cdn.Distribution;
 import ch.cyberduck.core.cdn.DistributionUrlProvider;
 import ch.cyberduck.core.preferences.HostPreferences;
@@ -40,9 +28,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jets3t.service.utils.ServiceUtils;
 
-import java.net.URI;
 import java.text.MessageFormat;
 import java.util.Calendar;
+import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -71,56 +59,64 @@ public class S3UrlProvider implements UrlProvider {
     }
 
     @Override
-    public DescriptiveUrlBag toUrl(final Path file) {
+    public DescriptiveUrlBag toUrl(final Path file, final EnumSet<DescriptiveUrl.Type> types) {
         final DescriptiveUrlBag list = new DescriptiveUrlBag();
         if(new HostPreferences(session.getHost()).getBoolean("s3.bucket.virtualhost.disable")) {
-            list.addAll(new DefaultUrlProvider(session.getHost()).toUrl(file));
+            list.addAll(new DefaultUrlProvider(session.getHost()).toUrl(file, types));
         }
         else {
-            list.add(this.toUrl(file, session.getHost().getProtocol().getScheme(), session.getHost().getPort()));
-            list.add(this.toUrl(file, Scheme.http, 80));
-            if(StringUtils.isNotBlank(session.getHost().getWebURL())) {
-                // Only include when custom domain is configured
-                list.addAll(new HostWebUrlProvider(session.getHost()).toUrl(file));
-            }
-        }
-        if(file.isFile()) {
-            if(!session.getHost().getCredentials().isAnonymousLogin()) {
-                // X-Amz-Expires must be less than a week (in seconds); that is, the given X-Amz-Expires must be less
-                // than 604800 seconds
-                // In one hour
-                list.add(this.toSignedUrl(file, (int) TimeUnit.HOURS.toSeconds(1)));
-                // Default signed URL expiring in 24 hours.
-                list.add(this.toSignedUrl(file, (int) TimeUnit.SECONDS.toSeconds(
-                        new HostPreferences(session.getHost()).getInteger("s3.url.expire.seconds"))));
-                // 1 Week
-                list.add(this.toSignedUrl(file, (int) TimeUnit.DAYS.toSeconds(7)));
-                switch(session.getSignatureVersion()) {
-                    case AWS2:
-                        // 1 Month
-                        list.add(this.toSignedUrl(file, (int) TimeUnit.DAYS.toSeconds(30)));
-                        // 1 Year
-                        list.add(this.toSignedUrl(file, (int) TimeUnit.DAYS.toSeconds(365)));
-                        break;
-                    case AWS4HMACSHA256:
-                        break;
+            if(types.contains(DescriptiveUrl.Type.http)) {
+                list.add(this.toUrl(file, session.getHost().getProtocol().getScheme(), session.getHost().getPort()));
+                list.add(this.toUrl(file, Scheme.http, 80));
+                if(StringUtils.isNotBlank(session.getHost().getWebURL())) {
+                    // Only include when custom domain is configured
+                    list.addAll(new HostWebUrlProvider(session.getHost()).toUrl(file, types));
                 }
             }
         }
-        // AWS services require specifying an Amazon S3 bucket using S3://bucket
-        list.add(new DescriptiveUrl(URI.create(String.format("s3://%s%s",
-                containerService.getContainer(file).getName(),
-                file.isRoot() ? Path.DELIMITER : containerService.isContainer(file) ? Path.DELIMITER : String.format("/%s", URIEncoder.encode(containerService.getKey(file))))),
-                DescriptiveUrl.Type.provider,
-                MessageFormat.format(LocaleFactory.localizedString("{0} URL"), "S3")));
-        // Filter by matching container name
-        final Optional<Set<Distribution>> filtered = distributions.entrySet().stream().filter(entry ->
-                        new SimplePathPredicate(containerService.getContainer(file)).test(entry.getKey()))
-                .map(Map.Entry::getValue).findFirst();
-        if(filtered.isPresent()) {
-            // Add CloudFront distributions
-            for(Distribution distribution : filtered.get()) {
-                list.addAll(new DistributionUrlProvider(distribution).toUrl(file));
+        if(types.contains(DescriptiveUrl.Type.signed)) {
+            if(file.isFile()) {
+                if(!session.getHost().getCredentials().isAnonymousLogin()) {
+                    // X-Amz-Expires must be less than a week (in seconds); that is, the given X-Amz-Expires must be less
+                    // than 604800 seconds
+                    // In one hour
+                    list.add(this.toSignedUrl(file, (int) TimeUnit.HOURS.toSeconds(1)));
+                    // Default signed URL expiring in 24 hours.
+                    list.add(this.toSignedUrl(file, (int) TimeUnit.SECONDS.toSeconds(
+                            new HostPreferences(session.getHost()).getInteger("s3.url.expire.seconds"))));
+                    // 1 Week
+                    list.add(this.toSignedUrl(file, (int) TimeUnit.DAYS.toSeconds(7)));
+                    switch(session.getSignatureVersion()) {
+                        case AWS2:
+                            // 1 Month
+                            list.add(this.toSignedUrl(file, (int) TimeUnit.DAYS.toSeconds(30)));
+                            // 1 Year
+                            list.add(this.toSignedUrl(file, (int) TimeUnit.DAYS.toSeconds(365)));
+                            break;
+                        case AWS4HMACSHA256:
+                            break;
+                    }
+                }
+            }
+        }
+        if(types.contains(DescriptiveUrl.Type.provider)) {
+            // AWS services require specifying an Amazon S3 bucket using S3://bucket
+            list.add(new DescriptiveUrl(String.format("s3://%s%s",
+                    containerService.getContainer(file).getName(),
+                    file.isRoot() ? Path.DELIMITER : containerService.isContainer(file) ? Path.DELIMITER : String.format("/%s", containerService.getKey(file))),
+                    DescriptiveUrl.Type.provider,
+                    MessageFormat.format(LocaleFactory.localizedString("{0} URL"), "AWS CLI")));
+        }
+        if(types.contains(DescriptiveUrl.Type.cdn)) {
+            // Filter by matching container name
+            final Optional<Set<Distribution>> filtered = distributions.entrySet().stream().filter(entry ->
+                            new SimplePathPredicate(containerService.getContainer(file)).test(entry.getKey()))
+                    .map(Map.Entry::getValue).findFirst();
+            if(filtered.isPresent()) {
+                // Add CloudFront distributions
+                for(Distribution distribution : filtered.get()) {
+                    list.addAll(new DistributionUrlProvider(distribution).toUrl(file, types));
+                }
             }
         }
         return list;
@@ -161,7 +157,7 @@ public class S3UrlProvider implements UrlProvider {
                 url.append(URIEncoder.encode(file.getAbsolute()));
             }
         }
-        return new DescriptiveUrl(URI.create(url.toString()), DescriptiveUrl.Type.http,
+        return new DescriptiveUrl(url.toString(), DescriptiveUrl.Type.http,
                 MessageFormat.format(LocaleFactory.localizedString("{0} URL"), scheme.name().toUpperCase(Locale.ROOT)));
     }
 
@@ -201,11 +197,16 @@ public class S3UrlProvider implements UrlProvider {
 
         @Override
         public String getUrl() {
-            final String secret = store.findLoginPassword(session.getHost());
+            final String secret;
+            final Credentials credentials = CredentialsConfiguratorFactory.get(session.getHost().getProtocol()).configure(session.getHost());
+            if(credentials.isPasswordAuthentication()) {
+                secret = credentials.getPassword();
+            }
+            else {
+                secret = store.findLoginPassword(session.getHost());
+            }
             if(StringUtils.isBlank(secret)) {
-                if(log.isWarnEnabled()) {
-                    log.warn("No secret found in password store required to sign temporary URL");
-                }
+                log.error("No secret found in password store required to sign temporary URL");
                 return DescriptiveUrl.EMPTY.getUrl();
             }
             String region = session.getHost().getRegion();

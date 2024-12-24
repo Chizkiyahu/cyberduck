@@ -18,14 +18,14 @@
     <parent>
         <groupId>ch.cyberduck</groupId>
         <artifactId>parent</artifactId>
-        <version>8.8.1</version>
+        <version>9.1.2-SNAPSHOT</version>
     </parent>
     <artifactId>webdav</artifactId>
     <packaging>jar</packaging>
 
     <properties>
         <sardine-version>5.14</sardine-version>
-        <milton-api.version>4.0.2.2101</milton-api.version>
+        <milton-api.version>4.0.5.2400</milton-api.version>
     </properties>
 
     <dependencies>
@@ -76,7 +76,7 @@
         <dependency>
             <groupId>jakarta.servlet</groupId>
             <artifactId>jakarta.servlet-api</artifactId>
-            <version>6.0.0</version>
+            <version>6.1.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

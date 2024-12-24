@@ -20,6 +20,7 @@ import ch.cyberduck.core.ConnectionCallback;
 import ch.cyberduck.core.Local;
 import ch.cyberduck.core.LocaleFactory;
 import ch.cyberduck.core.Path;
+import ch.cyberduck.core.ProgressListener;
 import ch.cyberduck.core.concurrency.Interruptibles;
 import ch.cyberduck.core.eue.io.swagger.client.model.ResourceCreationResponseEntry;
 import ch.cyberduck.core.eue.io.swagger.client.model.UploadType;
@@ -80,7 +81,7 @@ public class EueLargeUploadService extends HttpUploadFeature<EueWriteFeature.Chu
     }
 
     @Override
-    public EueWriteFeature.Chunk upload(final Path file, final Local local, final BandwidthThrottle throttle, final StreamListener listener,
+    public EueWriteFeature.Chunk upload(final Path file, final Local local, final BandwidthThrottle throttle, final ProgressListener progress, final StreamListener streamListener,
                                         final TransferStatus status, final ConnectionCallback callback) throws BackgroundException {
         final ThreadPool pool = ThreadPoolFactory.get("multipart", concurrency);
         try {
@@ -102,7 +103,7 @@ public class EueLargeUploadService extends HttpUploadFeature<EueWriteFeature.Chu
             }
             for(int partNumber = 1; remaining > 0; partNumber++) {
                 final long length = Math.min(chunksize, remaining);
-                parts.add(this.submit(pool, file, local, throttle, listener, status,
+                parts.add(this.submit(pool, file, local, throttle, streamListener, status,
                         uploadUri, resourceId, partNumber, offset, length, callback));
                 remaining -= length;
                 offset += length;
@@ -117,7 +118,7 @@ public class EueLargeUploadService extends HttpUploadFeature<EueWriteFeature.Chu
                     messageDigest.update(Hex.decodeHex(chunk.getChecksum().hash));
                 }
                 catch(DecoderException e) {
-                    log.error(String.format("Failure %s decoding hash %s", e, chunk.getChecksum()));
+                    log.error("Failure {} decoding hash {}", e, chunk.getChecksum());
                 }
                 messageDigest.update(ChunkListSHA256ChecksumCompute.intToBytes(chunk.getLength().intValue()));
             });
@@ -126,7 +127,7 @@ public class EueLargeUploadService extends HttpUploadFeature<EueWriteFeature.Chu
                     .getCompletedUploadResponse(uploadUri, size, cdash64);
             if(!StringUtils.equals(cdash64, completedUploadResponse.getCdash64())) {
                 if(file.getType().contains(Path.Type.encrypted)) {
-                    log.warn(String.format("Skip checksum verification for %s with client side encryption enabled", file));
+                    log.warn("Skip checksum verification for {} with client side encryption enabled", file);
                 }
                 else {
                     throw new ChecksumException(MessageFormat.format(LocaleFactory.localizedString("Upload {0} failed", "Error"), file.getName()),
@@ -152,9 +153,7 @@ public class EueLargeUploadService extends HttpUploadFeature<EueWriteFeature.Chu
                                                  final BandwidthThrottle throttle, final StreamListener listener,
                                                  final TransferStatus overall, final String url, final String resourceId,
                                                  final int partNumber, final long offset, final long length, final ConnectionCallback callback) {
-        if(log.isInfoEnabled()) {
-            log.info(String.format("Submit %s to queue with offset %d and length %d", file, offset, length));
-        }
+        log.info("Submit {} to queue with offset {} and length {}", file, offset, length);
         final BytecountStreamListener counter = new BytecountStreamListener(listener);
         return pool.execute(new SegmentRetryCallable<>(session.getHost(), new BackgroundExceptionCallable<EueWriteFeature.Chunk>() {
             @Override
@@ -173,9 +172,7 @@ public class EueLargeUploadService extends HttpUploadFeature<EueWriteFeature.Chu
                 status.setUrl(url);
                 final EueWriteFeature.Chunk chunk = EueLargeUploadService.this.upload(
                         file, local, throttle, listener, status, overall, status, callback);
-                if(log.isInfoEnabled()) {
-                    log.info(String.format("Received response %s for part %d", chunk, partNumber));
-                }
+                log.info("Received response {} for part {}", chunk, partNumber);
                 return chunk;
             }
         }, overall, counter));

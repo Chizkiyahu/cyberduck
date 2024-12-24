@@ -95,9 +95,7 @@ public class DefaultVaultRegistry extends CopyOnWriteArraySet<Vault> implements 
 
     @Override
     public void clear() {
-        if(log.isInfoEnabled()) {
-            log.info(String.format("Close %d registered vaults", this.size()));
-        }
+        log.info("Close {} registered vaults", this.size());
         this.forEach(Vault::close);
         super.clear();
     }
@@ -106,9 +104,7 @@ public class DefaultVaultRegistry extends CopyOnWriteArraySet<Vault> implements 
     public Vault find(final Session session, final Path file, final boolean unlock) throws VaultUnlockCancelException {
         for(Vault vault : this) {
             if(vault.contains(file)) {
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Found vault %s for file %s", vault, file));
-                }
+                log.debug("Found vault {} for file {}", vault, file);
                 return vault;
             }
         }
@@ -144,15 +140,11 @@ public class DefaultVaultRegistry extends CopyOnWriteArraySet<Vault> implements 
     protected <T> T _getFeature(final Session<?> session, final Class<T> type, final T proxy) {
         if(type == ListService.class) {
             return (T) new VaultRegistryListService(session, (ListService) proxy, this,
-                    new LoadingVaultLookupListener(this, prompt))
-                    .withAutodetect(new HostPreferences(session.getHost()).getBoolean("cryptomator.vault.autodetect")
-                    );
+                    new LoadingVaultLookupListener(this, prompt));
         }
         if(type == Find.class) {
             return (T) new VaultRegistryFindFeature(session, (Find) proxy, this,
-                    new LoadingVaultLookupListener(this, prompt))
-                    .withAutodetect(new HostPreferences(session.getHost()).getBoolean("cryptomator.vault.autodetect")
-                    );
+                    new LoadingVaultLookupListener(this, prompt));
         }
         if(type == Bulk.class) {
             return (T) new VaultRegistryBulkFeature(session, (Bulk) proxy, this);

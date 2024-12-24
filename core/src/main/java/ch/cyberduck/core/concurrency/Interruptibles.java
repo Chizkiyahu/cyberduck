@@ -70,9 +70,7 @@ public class Interruptibles {
         }
         catch(InterruptedException e) {
             final Thread thread = currentThread();
-            if(log.isWarnEnabled()) {
-                log.warn(String.format("Interrupted %s while waiting for %s", thread, latch));
-            }
+            log.warn("Interrupted {} while waiting for {}", thread, latch);
             thread.interrupt();
             throw ExceptionUtils.throwableOfType(e, throwable);
         }
@@ -100,17 +98,15 @@ public class Interruptibles {
             }
         }
         catch(ExecutionException e) {
-            if(log.isWarnEnabled()) {
-                log.warn(String.format("Execution of %s failed with %s", future, e));
+            log.warn("Execution of {} failed with {}", future, e);
+            for(Throwable cause : ExceptionUtils.getThrowableList(e)) {
+                Throwables.throwIfInstanceOf(cause, BackgroundException.class);
             }
-            Throwables.throwIfInstanceOf(Throwables.getRootCause(e), BackgroundException.class);
             throw new DefaultExceptionMappingService().map(Throwables.getRootCause(e));
         }
         catch(InterruptedException e) {
             final Thread thread = currentThread();
-            if(log.isWarnEnabled()) {
-                log.warn(String.format("Interrupted %s while waiting for %s", thread, future));
-            }
+            log.warn("Interrupted {} while waiting for {}", thread, future);
             thread.interrupt();
             throw ExceptionUtils.throwableOfType(e, ConnectionCanceledException.class);
         }
@@ -152,9 +148,7 @@ public class Interruptibles {
         @Override
         public void verify() throws ConnectionCanceledException {
             if(!parent.isAlive()) {
-                if(log.isWarnEnabled()) {
-                    log.warn(String.format("Cancel waiting with parent thread %s dead", parent));
-                }
+                log.warn("Cancel waiting with parent thread {} dead", parent);
                 throw new ConnectionCanceledException();
             }
         }

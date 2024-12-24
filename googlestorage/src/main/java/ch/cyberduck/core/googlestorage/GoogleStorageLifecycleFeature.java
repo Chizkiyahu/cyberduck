@@ -43,7 +43,7 @@ public class GoogleStorageLifecycleFeature implements Lifecycle {
 
     public GoogleStorageLifecycleFeature(final GoogleStorageSession session) {
         this.session = session;
-        this.containerService = session.getFeature(PathContainerService.class);
+        this.containerService = new GoogleStoragePathContainerService();
     }
 
     @Override
@@ -123,7 +123,7 @@ public class GoogleStorageLifecycleFeature implements Lifecycle {
                 throw new GoogleStorageExceptionMappingService().map("Failure to read attributes of {0}", e, container);
             }
             catch(AccessDeniedException | InteroperabilityException l) {
-                log.warn(String.format("Missing permission to read lifecycle configuration for %s %s", container, e.getMessage()));
+                log.warn("Missing permission to read lifecycle configuration for {} {}", container, e.getMessage());
                 return LifecycleConfiguration.empty();
             }
         }

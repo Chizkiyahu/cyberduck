@@ -39,11 +39,13 @@ import ch.cyberduck.core.shared.DefaultFindFeature;
 import ch.cyberduck.core.transfer.TransferStatus;
 import ch.cyberduck.test.IntegrationTest;
 
+import org.apache.commons.lang3.StringUtils;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Optional;
 
 import static org.junit.Assert.*;
 
@@ -76,7 +78,7 @@ public class GraphMoveFeatureTest extends AbstractOneDriveTest {
         assertNotNull(attributes);
         assertEquals(file.attributes().getFileId(), attributes.getFileId());
         Path rename = new Path(drive, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
-        assertTrue(move.isSupported(file, rename));
+        assertTrue(move.isSupported(file, Optional.of(rename)));
         final TransferStatus status = new TransferStatus();
         final Path target = move.move(file, rename, status, new Delete.DisabledCallback(), new DisabledConnectionCallback());
         assertEquals(attributes, target.attributes());
@@ -103,7 +105,7 @@ public class GraphMoveFeatureTest extends AbstractOneDriveTest {
         final PathAttributes attributes = attributesFinder.find(touchedFile);
 
         Path rename = new Path(targetDirectory, touchedFile.getName(), EnumSet.of(Path.Type.file));
-        assertTrue(move.isSupported(touchedFile, rename));
+        assertTrue(move.isSupported(touchedFile, Optional.of(rename)));
         final Path target = move.move(touchedFile, rename, new TransferStatus(), new Delete.DisabledCallback(), new DisabledConnectionCallback());
         final PathAttributes renamedAttributes = attributesFinder.find(rename);
         assertNotNull(renamedAttributes);
@@ -131,7 +133,7 @@ public class GraphMoveFeatureTest extends AbstractOneDriveTest {
         assertNotNull(attributesFinder.find(touchedFile));
 
         Path rename = new Path(drive, touchedFile.getName(), EnumSet.of(Path.Type.file));
-        assertTrue(move.isSupported(touchedFile, rename));
+        assertTrue(move.isSupported(touchedFile, Optional.of(rename)));
         move.move(touchedFile, rename, new TransferStatus(), new Delete.DisabledCallback(), new DisabledConnectionCallback());
         assertNotNull(attributesFinder.find(rename));
 
@@ -156,7 +158,7 @@ public class GraphMoveFeatureTest extends AbstractOneDriveTest {
         assertNotNull(attributesFinder.find(touchedFile));
 
         Path rename = new Path(targetDirectory, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
-        assertTrue(move.isSupported(touchedFile, rename));
+        assertTrue(move.isSupported(touchedFile, Optional.of(rename)));
         move.move(touchedFile, rename, new TransferStatus(), new Delete.DisabledCallback(), new DisabledConnectionCallback());
         assertNotNull(attributesFinder.find(rename));
 
@@ -175,5 +177,15 @@ public class GraphMoveFeatureTest extends AbstractOneDriveTest {
         assertFalse(find.find(temp));
         assertTrue(find.find(test));
         new GraphDeleteFeature(session, fileid).delete(Collections.singletonList(folder), new DisabledLoginCallback(), new Delete.DisabledCallback());
+    }
+
+    @Test
+    public void testRenameCaseOnly() throws Exception {
+        final Path home = new OneDriveHomeFinderService().find();
+        final String name = new AlphanumericRandomStringService().random();
+        final Path file = new GraphTouchFeature(session, fileid).touch(new Path(home, StringUtils.capitalize(name), EnumSet.of(Path.Type.file)), new TransferStatus());
+        final Path rename = new Path(home, StringUtils.lowerCase(name), EnumSet.of(Path.Type.file));
+        new GraphMoveFeature(session, fileid).move(file, rename, new TransferStatus().exists(true), new Delete.DisabledCallback(), new DisabledConnectionCallback());
+        new GraphDeleteFeature(session, fileid).delete(Collections.singletonList(rename), new DisabledLoginCallback(), new Delete.DisabledCallback());
     }
 }

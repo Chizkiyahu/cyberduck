@@ -31,6 +31,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Optional;
 
 public class SDSDelegatingMoveFeature implements Move {
     private static final Logger log = LogManager.getLogger(SDSDelegatingMoveFeature.class);
@@ -60,14 +61,12 @@ public class SDSDelegatingMoveFeature implements Move {
         if(new SDSTripleCryptEncryptorFeature(session, nodeid).isEncrypted(source) ^ new SDSTripleCryptEncryptorFeature(session, nodeid).isEncrypted(containerService.getContainer(target))) {
             // Moving into or from an encrypted room
             final Copy copy = new SDSDelegatingCopyFeature(session, nodeid, new SDSCopyFeature(session, nodeid));
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Move %s to %s using copy feature %s", source, target, copy));
-            }
+            log.debug("Move {} to {} using copy feature {}", source, target, copy);
             final Path c = copy.copy(source, target, status, connectionCallback, new DisabledStreamListener());
             // Delete source file after copy is complete
             final Delete delete = new SDSDeleteFeature(session, nodeid);
             if(delete.isSupported(source)) {
-                log.warn(String.format("Delete source %s copied to %s", source, target));
+                log.warn("Delete source {} copied to {}", source, target);
                 delete.delete(Collections.singletonMap(source, status), connectionCallback, callback);
             }
             return c;
@@ -88,12 +87,18 @@ public class SDSDelegatingMoveFeature implements Move {
     }
 
     @Override
-    public void preflight(final Path source, final Path target) throws BackgroundException {
-        if(SDSAttributesAdapter.isEncrypted(source.attributes()) ^ SDSAttributesAdapter.isEncrypted(containerService.getContainer(target).attributes())) {
-            session.getFeature(Copy.class).preflight(source, target);
+    public void preflight(final Path source, final Optional<Path> optional) throws BackgroundException {
+        if(optional.isPresent()) {
+            final Path target = optional.get();
+            if(SDSAttributesAdapter.isEncrypted(source.attributes()) ^ SDSAttributesAdapter.isEncrypted(containerService.getContainer(target).attributes())) {
+                session.getFeature(Copy.class).preflight(source, optional);
+            }
+            else {
+                proxy.preflight(source, optional);
+            }
         }
         else {
-            proxy.preflight(source, target);
+            proxy.preflight(source, optional);
         }
     }
 

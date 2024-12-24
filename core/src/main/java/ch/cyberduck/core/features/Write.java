@@ -42,15 +42,6 @@ public interface Write<Reply> {
     StatusOutputStream<Reply> write(Path file, TransferStatus status, final ConnectionCallback callback) throws BackgroundException;
 
     /**
-     * Determine if appending to file is supported
-     *
-     * @param file   File
-     * @param status Transfer status including attributes of file on server and size of file to write
-     * @return True if can append to existing file
-     */
-    Append append(Path file, TransferStatus status) throws BackgroundException;
-
-    /**
      * @return True if supporting random writes with arbitrary offset and length
      */
     default boolean random(Path file) {
@@ -83,7 +74,7 @@ public interface Write<Reply> {
         /**
          * Remote file size
          */
-        public Long size = 0L;
+        public Long offset = 0L;
 
         /**
          * Remote file checksum
@@ -99,13 +90,13 @@ public interface Write<Reply> {
             return this;
         }
 
-        public Append withSize(final Long size) {
-            this.size = size;
+        public Append withOffset(final Long offset) {
+            this.offset = offset;
             return this;
         }
 
         public Append withStatus(final TransferStatus status) {
-            return this.withSize(TransferStatus.UNKNOWN_LENGTH == status.getRemote().getSize() ? 0L : status.getRemote().getSize()).withChecksum(status.getRemote().getChecksum());
+            return this.withOffset(TransferStatus.UNKNOWN_LENGTH == status.getRemote().getSize() ? 0L : status.getRemote().getSize()).withChecksum(status.getRemote().getChecksum());
         }
 
         @Override
@@ -117,18 +108,18 @@ public interface Write<Reply> {
                 return false;
             }
             final Append append1 = (Append) o;
-            return append == append1.append && Objects.equals(size, append1.size) && Objects.equals(checksum, append1.checksum);
+            return append == append1.append && Objects.equals(offset, append1.offset) && Objects.equals(checksum, append1.checksum);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(append, size, checksum);
+            return Objects.hash(append, offset, checksum);
         }
 
         @Override
         public String toString() {
             final StringBuilder sb = new StringBuilder("Append{");
-            sb.append("size=").append(size);
+            sb.append("size=").append(offset);
             sb.append(", checksum=").append(checksum);
             sb.append('}');
             return sb.toString();
@@ -141,10 +132,14 @@ public interface Write<Reply> {
     Append override = new Append(false);
 
     default void preflight(final Path file) throws BackgroundException {
+        if(!file.attributes().getPermission().isWritable()) {
+            throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Upload {0} failed", "Error"),
+                    file.getName())).withFile(file);
+        }
         final Path workdir = file.getParent();
         if(!workdir.attributes().getPermission().isWritable()) {
             throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Upload {0} failed", "Error"),
-                    file.getName())).withFile(file);
+                    file.getName())).withFile(workdir);
         }
     }
 
@@ -166,6 +161,22 @@ public interface Write<Reply> {
         /**
          * Random writes with arbitrary offset and length
          */
-        random
+        random,
+        /**
+         * Set permissions on upload
+         */
+        permission,
+        /**
+         * Set ACL on upload
+         */
+        acl,
+        /**
+         * Setting checksum on upload to allow verification on server
+         */
+        checksum,
+        /**
+         * Set MIME type on upload
+         */
+        mime
     }
 }

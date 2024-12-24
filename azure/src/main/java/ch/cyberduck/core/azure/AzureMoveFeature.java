@@ -19,9 +19,7 @@ package ch.cyberduck.core.azure;
  */
 
 import ch.cyberduck.core.ConnectionCallback;
-import ch.cyberduck.core.DirectoryDelimiterPathContainerService;
 import ch.cyberduck.core.Path;
-import ch.cyberduck.core.PathContainerService;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.features.Delete;
 import ch.cyberduck.core.features.Move;
@@ -29,13 +27,11 @@ import ch.cyberduck.core.io.DisabledStreamListener;
 import ch.cyberduck.core.transfer.TransferStatus;
 
 import java.util.Collections;
+import java.util.Optional;
 
 import com.microsoft.azure.storage.OperationContext;
 
 public class AzureMoveFeature implements Move {
-
-    private final PathContainerService containerService
-            = new DirectoryDelimiterPathContainerService();
 
     private final AzureCopyFeature proxy;
     private final AzureDeleteFeature delete;
@@ -46,7 +42,7 @@ public class AzureMoveFeature implements Move {
     }
 
     @Override
-    public void preflight(final Path source, final Path target) throws BackgroundException {
+    public void preflight(final Path source, final Optional<Path> target) throws BackgroundException {
         proxy.preflight(source, target);
         delete.preflight(source);
     }

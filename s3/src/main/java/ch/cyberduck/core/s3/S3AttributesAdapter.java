@@ -15,21 +15,32 @@ package ch.cyberduck.core.s3;
  * GNU General Public License for more details.
  */
 
+import ch.cyberduck.core.Host;
 import ch.cyberduck.core.PathAttributes;
 import ch.cyberduck.core.features.AttributesAdapter;
 import ch.cyberduck.core.features.Encryption;
 import ch.cyberduck.core.io.Checksum;
+import ch.cyberduck.core.preferences.HostPreferences;
 
 import org.apache.commons.lang3.StringUtils;
 import org.jets3t.service.model.S3Object;
 import org.jets3t.service.model.StorageObject;
 
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 
 import com.google.common.collect.Maps;
 
+import static org.jets3t.service.model.StorageObject.METADATA_HEADER_SERVER_SIDE_ENCRYPTION_KMS_KEY_ID;
+
 public class S3AttributesAdapter implements AttributesAdapter<StorageObject> {
+
+    private final Host host;
+
+    public S3AttributesAdapter(final Host host) {
+        this.host = host;
+    }
 
     @Override
     public PathAttributes toAttributes(final StorageObject object) {
@@ -53,11 +64,13 @@ public class S3AttributesAdapter implements AttributesAdapter<StorageObject> {
         // not the MD5 of the object data.
         attributes.setChecksum(Checksum.parse(object.getETag()));
         if(object instanceof S3Object) {
-            attributes.setVersionId(((S3Object) object).getVersionId());
+            if(new HostPreferences(host).getBoolean("s3.listing.versioning.enable")) {
+                attributes.setVersionId(((S3Object) object).getVersionId());
+            }
         }
-        if(object.containsMetadata("server-side-encryption-aws-kms-key-id")) {
+        if(object.containsMetadata(METADATA_HEADER_SERVER_SIDE_ENCRYPTION_KMS_KEY_ID)) {
             attributes.setEncryption(new Encryption.Algorithm(object.getServerSideEncryptionAlgorithm(),
-                    object.getMetadata("server-side-encryption-aws-kms-key-id").toString()) {
+                    object.getMetadata(METADATA_HEADER_SERVER_SIDE_ENCRYPTION_KMS_KEY_ID).toString()) {
                 @Override
                 public String getDescription() {
                     return String.format("SSE-KMS (%s)", key);
@@ -75,7 +88,7 @@ public class S3AttributesAdapter implements AttributesAdapter<StorageObject> {
                 });
             }
         }
-        final Map<String, String> metadata = Maps.transformValues(object.getUserMetadataMap(), Object::toString);
+        final Map<String, String> metadata = metadata(object);
         if(!metadata.isEmpty()) {
             attributes.setMetadata(metadata);
         }
@@ -90,5 +103,18 @@ public class S3AttributesAdapter implements AttributesAdapter<StorageObject> {
             attributes.setCreationDate(ctime);
         }
         return attributes;
+    }
+
+    /**
+     * @return Pruned metadata with user editable headers only
+     */
+    public static Map<String, String> metadata(final StorageObject object) {
+        final Map<String, String> metadata = new HashMap<>(Maps.transformValues(object.getModifiableMetadata(), Object::toString));
+        metadata.keySet().removeIf(header -> StringUtils.equalsIgnoreCase(header, "storage-class"));
+        metadata.keySet().removeIf(header -> StringUtils.equalsIgnoreCase(header, "server-side-encryption"));
+        metadata.keySet().removeIf(header -> StringUtils.equalsIgnoreCase(header, "expiration"));
+        metadata.keySet().removeIf(header -> StringUtils.equalsIgnoreCase(header, "checksum-sha256"));
+        metadata.keySet().removeIf(header -> StringUtils.equalsIgnoreCase(header, "version-id"));
+        return metadata;
     }
 }

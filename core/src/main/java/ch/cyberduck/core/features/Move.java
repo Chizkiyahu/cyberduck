@@ -19,6 +19,7 @@ import ch.cyberduck.core.ConnectionCallback;
 import ch.cyberduck.core.LocaleFactory;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.Session;
+import ch.cyberduck.core.SimplePathPredicate;
 import ch.cyberduck.core.exception.AccessDeniedException;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.InvalidFilenameException;
@@ -27,6 +28,7 @@ import ch.cyberduck.core.transfer.TransferStatus;
 
 import java.text.MessageFormat;
 import java.util.EnumSet;
+import java.util.Optional;
 
 /**
  * Move or rename file or folder on server
@@ -57,7 +59,7 @@ public interface Move {
      * @param target Target file or folder
      * @return False if not supported for given files
      */
-    default boolean isSupported(final Path source, final Path target) {
+    default boolean isSupported(final Path source, final java.util.Optional<Path> target) {
         try {
             this.preflight(source, target);
             return true;
@@ -80,20 +82,26 @@ public interface Move {
      * @throws UnsupportedException     Move operation not supported for source
      * @throws InvalidFilenameException Target filename not supported
      */
-    default void preflight(final Path source, final Path target) throws BackgroundException {
-        if(!target.getParent().attributes().getPermission().isWritable()) {
-            throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"),
-                    source.getName())).withFile(source);
+    default void preflight(final Path source, final Optional<Path> target) throws BackgroundException {
+        if(target.isPresent()) {
+            if(!target.get().getParent().attributes().getPermission().isWritable()) {
+                throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"),
+                        source.getName())).withFile(source);
+            }
+            // Deny move to self
+            if(new SimplePathPredicate(source).test(target.get())) {
+                throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"),
+                        source.getName())).withFile(source);
+            }
         }
     }
-
 
     /**
      * @return Supported features
      */
-   default EnumSet<Flags> features(Path source, Path target) {
-       return EnumSet.noneOf(Flags.class);
-   }
+    default EnumSet<Flags> features(Path source, Path target) {
+        return EnumSet.noneOf(Flags.class);
+    }
 
     /**
      * Feature flags

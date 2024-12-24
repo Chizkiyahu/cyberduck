@@ -37,15 +37,12 @@ import org.apache.logging.log4j.Logger;
 import java.io.IOException;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import synapticloop.b2.exception.B2ApiException;
-import synapticloop.b2.response.B2FileInfoResponse;
 import synapticloop.b2.response.B2FileResponse;
 import synapticloop.b2.response.B2GetUploadPartUrlResponse;
 import synapticloop.b2.response.B2GetUploadUrlResponse;
-import synapticloop.b2.response.B2UploadPartResponse;
 import synapticloop.b2.response.BaseB2Response;
 
 import static ch.cyberduck.core.b2.B2MetadataFeature.X_BZ_INFO_SRC_CREATION_DATE_MILLIS;
@@ -87,23 +84,19 @@ public class B2WriteFeature extends AbstractHttpWriteFeature<BaseB2Response> imp
                     else {
                         if(null == urls.get()) {
                             final B2GetUploadUrlResponse uploadUrl = session.getClient().getUploadUrl(fileid.getVersionId(containerService.getContainer(file)));
-                            if(log.isDebugEnabled()) {
-                                log.debug(String.format("Obtained upload URL %s for file %s", uploadUrl, file));
-                            }
+                            log.debug("Obtained upload URL {} for file {}", uploadUrl, file);
                             urls.set(uploadUrl);
                             return this.upload(uploadUrl, entity, checksum);
                         }
                         else {
                             final B2GetUploadUrlResponse uploadUrl = urls.get();
-                            if(log.isDebugEnabled()) {
-                                log.debug(String.format("Use cached upload URL %s for file %s", uploadUrl, file));
-                            }
+                            log.debug("Use cached upload URL {} for file {}", uploadUrl, file);
                             try {
                                 return this.upload(uploadUrl, entity, checksum);
                             }
                             catch(IOException | B2ApiException e) {
                                 // Upload many files to the same upload_url until that URL gives an error
-                                log.warn(String.format("Remove cached upload URL after failure %s", e));
+                                log.warn("Remove cached upload URL after failure {}", e.toString());
                                 urls.remove();
                                 // Retry
                                 return this.upload(uploadUrl, entity, checksum);
@@ -149,21 +142,7 @@ public class B2WriteFeature extends AbstractHttpWriteFeature<BaseB2Response> imp
     }
 
     @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        final B2LargeUploadPartService partService = new B2LargeUploadPartService(session, fileid);
-        final List<B2FileInfoResponse> upload = partService.find(file);
-        if(!upload.isEmpty()) {
-            Long size = 0L;
-            for(B2UploadPartResponse completed : partService.list(upload.iterator().next().getFileId())) {
-                size += completed.getContentLength();
-            }
-            return new Append(true).withStatus(status).withSize(size);
-        }
-        return new Append(false).withStatus(status);
-    }
-
-    @Override
     public EnumSet<Flags> features(final Path file) {
-        return EnumSet.of(Flags.timestamp);
+        return EnumSet.of(Flags.timestamp, Flags.checksum, Flags.mime);
     }
 }

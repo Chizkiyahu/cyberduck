@@ -17,16 +17,20 @@ package ch.cyberduck.core.googledrive;
 
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.exception.BackgroundException;
+import ch.cyberduck.core.features.Timestamp;
 import ch.cyberduck.core.preferences.HostPreferences;
-import ch.cyberduck.core.shared.DefaultTimestampFeature;
 import ch.cyberduck.core.transfer.TransferStatus;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 
 import com.google.api.client.util.DateTime;
 import com.google.api.services.drive.model.File;
 
-public class DriveTimestampFeature extends DefaultTimestampFeature {
+public class DriveTimestampFeature implements Timestamp {
+    private static final Logger log = LogManager.getLogger(DriveTimestampFeature.class);
 
     private final DriveSession session;
     private final DriveFileIdProvider fileid;
@@ -38,6 +42,10 @@ public class DriveTimestampFeature extends DefaultTimestampFeature {
 
     @Override
     public void setTimestamp(final Path file, final TransferStatus status) throws BackgroundException {
+        if(file.isVolume()) {
+            log.warn("Skip setting timestamp for {}", file);
+            return;
+        }
         try {
             if(null != status.getModified()) {
                 final String fileid = this.fileid.getFileId(file);

@@ -23,7 +23,7 @@ import ch.cyberduck.core.Host;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.Scheme;
 import ch.cyberduck.core.exception.LoginFailureException;
-import ch.cyberduck.core.proxy.Proxy;
+import ch.cyberduck.core.proxy.DisabledProxyFinder;
 import ch.cyberduck.core.shared.DefaultHomeFinderService;
 import ch.cyberduck.core.ssl.DefaultX509KeyManager;
 import ch.cyberduck.core.ssl.DisabledX509TrustManager;
@@ -42,15 +42,15 @@ public class SpectraSessionTest extends AbstractSpectraTest {
         final Host host = new Host(new SpectraProtocol() {
             @Override
             public Scheme getScheme() {
-                return Scheme.http;
+                return Scheme.https;
             }
         }, PROPERTIES.get("spectra.hostname"), Integer.parseInt(PROPERTIES.get("spectra.port")), new Credentials(
                 PROPERTIES.get("spectra.user"), "s"
         ));
         final SpectraSession session = new SpectraSession(host, new DisabledX509TrustManager(),
                 new DefaultX509KeyManager());
-        session.open(Proxy.DIRECT, new DisabledHostKeyCallback(), new DisabledLoginCallback(), new DisabledCancelCallback());
-        session.login(Proxy.DIRECT, new DisabledLoginCallback(), new DisabledCancelCallback());
+        session.open(new DisabledProxyFinder(), new DisabledHostKeyCallback(), new DisabledLoginCallback(), new DisabledCancelCallback());
+        session.login(new DisabledLoginCallback(), new DisabledCancelCallback());
         new SpectraBucketListService(session).list(new DefaultHomeFinderService(session).find(), new DisabledListProgressListener());
     }
 
@@ -59,15 +59,15 @@ public class SpectraSessionTest extends AbstractSpectraTest {
         final Host host = new Host(new SpectraProtocol() {
             @Override
             public Scheme getScheme() {
-                return Scheme.http;
+                return Scheme.https;
             }
         }, PROPERTIES.get("spectra.hostname"), Integer.parseInt(PROPERTIES.get("spectra.port")), new Credentials(
                 "u", PROPERTIES.get("spectra.key")
         ));
         final SpectraSession session = new SpectraSession(host, new DisabledX509TrustManager(),
                 new DefaultX509KeyManager());
-        session.open(Proxy.DIRECT, new DisabledHostKeyCallback(), new DisabledLoginCallback(), new DisabledCancelCallback());
-        session.login(Proxy.DIRECT, new DisabledLoginCallback(), new DisabledCancelCallback());
+        session.open(new DisabledProxyFinder(), new DisabledHostKeyCallback(), new DisabledLoginCallback(), new DisabledCancelCallback());
+        session.login(new DisabledLoginCallback(), new DisabledCancelCallback());
         new SpectraBucketListService(session).list(new DefaultHomeFinderService(session).find(), new DisabledListProgressListener());
     }
 

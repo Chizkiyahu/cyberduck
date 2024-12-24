@@ -65,7 +65,7 @@ public class DAVListService implements ListService {
                     new HostPreferences(session.getHost()).getInteger("webdav.listing.chunksize"))) {
                 for(final DavResource resource : list) {
                     if(new SimplePathPredicate(new Path(resource.getHref().getPath(), EnumSet.of(Path.Type.directory))).test(directory)) {
-                        log.warn(String.format("Ignore resource %s", resource));
+                        log.warn("Ignore resource {}", resource);
                         // Do not include self
                         if(resource.isDirectory()) {
                             continue;
@@ -78,9 +78,6 @@ public class DAVListService implements ListService {
                     children.add(file);
                     listener.chunk(directory, children);
                 }
-            }
-            if(children.isEmpty()) {
-                listener.chunk(directory, children);
             }
             return children;
         }

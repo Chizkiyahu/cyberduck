@@ -24,8 +24,10 @@ import ch.cyberduck.core.DefaultIOExceptionMappingService;
 import ch.cyberduck.core.DefaultPathContainerService;
 import ch.cyberduck.core.DisabledListProgressListener;
 import ch.cyberduck.core.Local;
+import ch.cyberduck.core.LocaleFactory;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathContainerService;
+import ch.cyberduck.core.ProgressListener;
 import ch.cyberduck.core.concurrency.Interruptibles;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.NotfoundException;
@@ -48,6 +50,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.security.MessageDigest;
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -68,6 +71,11 @@ public class SwiftLargeObjectUploadFeature extends HttpUploadFeature<StorageObje
     private final Integer concurrency;
 
     private Write<StorageObject> writer;
+
+    public SwiftLargeObjectUploadFeature(final SwiftSession session, final SwiftRegionService regionService, final Write<StorageObject> writer) {
+        this(session, regionService, writer, new HostPreferences(session.getHost()).getLong("openstack.upload.largeobject.size"),
+                new HostPreferences(session.getHost()).getInteger("openstack.upload.largeobject.concurrency"));
+    }
 
     public SwiftLargeObjectUploadFeature(final SwiftSession session, final SwiftRegionService regionService, final Write<StorageObject> writer,
                                          final Long segmentSize, final Integer concurrency) {
@@ -94,7 +102,7 @@ public class SwiftLargeObjectUploadFeature extends HttpUploadFeature<StorageObje
     @Override
     public StorageObject upload(final Path file, final Local local,
                                 final BandwidthThrottle throttle,
-                                final StreamListener listener,
+                                final ProgressListener progress, final StreamListener streamListener,
                                 final TransferStatus status,
                                 final ConnectionCallback callback) throws BackgroundException {
         final ThreadPool pool = ThreadPoolFactory.get("multipart", concurrency);
@@ -132,9 +140,7 @@ public class SwiftLargeObjectUploadFeature extends HttpUploadFeature<StorageObje
             final Path segment = segmentService.getSegment(file, segmentNumber);
             if(existingSegments.contains(segment)) {
                 final Path existingSegment = existingSegments.get(existingSegments.indexOf(segment));
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Skip segment %s", existingSegment));
-                }
+                log.debug("Skip segment {}", existingSegment);
                 final StorageObject stored = new StorageObject(containerService.getKey(segment));
                 if(HashAlgorithm.md5.equals(existingSegment.attributes().getChecksum().algorithm)) {
                     stored.setMd5sum(existingSegment.attributes().getChecksum().hash);
@@ -145,11 +151,8 @@ public class SwiftLargeObjectUploadFeature extends HttpUploadFeature<StorageObje
             }
             else {
                 // Submit to queue
-                segments.add(this.submit(pool, segment, local, throttle, listener, status, offset, length, callback));
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Segment %s submitted with size %d and offset %d",
-                            segment, length, offset));
-                }
+                segments.add(this.submit(pool, segment, local, throttle, streamListener, status, offset, length, callback));
+                log.debug("Segment {} submitted with size {} and offset {}", segment, length, offset);
                 remaining -= length;
                 offset += length;
             }
@@ -160,17 +163,15 @@ public class SwiftLargeObjectUploadFeature extends HttpUploadFeature<StorageObje
         finally {
             pool.shutdown(false);
         }
-        if(log.isInfoEnabled()) {
-            log.info(String.format("Finished large file upload %s with %d parts", file, completed.size()));
-        }
+        log.info("Finished large file upload {} with {} parts", file, completed.size());
         // Create and upload the large object manifest. It is best to upload all the segments first and
         // then create or update the manifest.
         try {
+            progress.message(MessageFormat.format(LocaleFactory.localizedString("Finalize {0}", "Status"),
+                    file.getName()));
             // Static Large Object.
             final String manifest = segmentService.manifest(containerService.getContainer(file).getName(), completed);
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Creating SLO manifest %s for %s", manifest, file));
-            }
+            log.debug("Creating SLO manifest {} for {}", manifest, file);
             final StorageObject stored = new StorageObject(containerService.getKey(file));
             stored.setSize(status.getOffset() + status.getLength());
             final String checksum = session.getClient().createSLOManifestObject(regionService.lookup(
@@ -211,6 +212,26 @@ public class SwiftLargeObjectUploadFeature extends HttpUploadFeature<StorageObje
                         segment, local, throttle, counter, status, overall, status, callback);
             }
         }, overall, counter));
+    }
+
+    @Override
+    public Write.Append append(final Path file, final TransferStatus status) throws BackgroundException {
+        final List<Path> segments;
+        long size = 0L;
+        try {
+            segments = new SwiftObjectListService(session, regionService).list(new SwiftSegmentService(session, regionService)
+                    .getSegmentsDirectory(file), new DisabledListProgressListener()).toList();
+            if(segments.isEmpty()) {
+                return Write.override;
+            }
+        }
+        catch(NotfoundException e) {
+            return Write.override;
+        }
+        for(Path segment : segments) {
+            size += segment.attributes().getSize();
+        }
+        return new Write.Append(true).withStatus(status).withOffset(size);
     }
 
     @Override

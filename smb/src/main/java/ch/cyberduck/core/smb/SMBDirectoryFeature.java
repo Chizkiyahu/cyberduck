@@ -18,7 +18,6 @@ package ch.cyberduck.core.smb;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.features.Directory;
-import ch.cyberduck.core.features.Write;
 import ch.cyberduck.core.transfer.TransferStatus;
 
 import com.hierynomus.smbj.common.SMBRuntimeException;
@@ -43,11 +42,6 @@ public class SMBDirectoryFeature implements Directory<Integer> {
         finally {
             session.releaseShare(share);
         }
-        return folder.withAttributes(new SMBAttributesFinderFeature(session).find(folder));
-    }
-
-    @Override
-    public SMBDirectoryFeature withWriter(final Write<Integer> writer) {
-        return this;
+        return folder;
     }
 }

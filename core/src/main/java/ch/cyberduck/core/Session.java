@@ -35,7 +35,7 @@ import ch.cyberduck.core.features.Versioning;
 import ch.cyberduck.core.features.Write;
 import ch.cyberduck.core.preferences.HostPreferences;
 import ch.cyberduck.core.preferences.PreferencesReader;
-import ch.cyberduck.core.proxy.Proxy;
+import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.shared.*;
 import ch.cyberduck.core.threading.CancelCallback;
 import ch.cyberduck.core.vault.VaultRegistry;
@@ -91,9 +91,7 @@ public abstract class Session<C> implements TranscriptListener {
     }
 
     public Session<?> withListener(final TranscriptListener listener) {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Add listener %s", listener));
-        }
+        log.debug("Add listener {}", listener);
         listeners.add(listener);
         return this;
     }
@@ -142,22 +140,18 @@ public abstract class Session<C> implements TranscriptListener {
      * @param cancel
      * @return Client
      */
-    public C open(final Proxy proxy, final HostKeyCallback key, final LoginCallback login, final CancelCallback cancel) throws BackgroundException {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Connection will open to %s", host));
-        }
+    public C open(final ProxyFinder proxy, final HostKeyCallback key, final LoginCallback login, final CancelCallback cancel) throws BackgroundException {
+        log.debug("Connection will open to {}", host);
         // Update status flag
         state = State.opening;
         client = this.connect(proxy, key, login, cancel);
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Connection did open to %s", host));
-        }
+        log.debug("Connection did open to {}", host);
         // Update status flag
         state = State.open;
         return client;
     }
 
-    protected abstract C connect(Proxy proxy, HostKeyCallback key, LoginCallback prompt, CancelCallback cancel) throws BackgroundException;
+    protected abstract C connect(ProxyFinder proxy, HostKeyCallback key, LoginCallback prompt, CancelCallback cancel) throws BackgroundException;
 
     /**
      * Send the authentication credentials to the server. The connection must be opened first.
@@ -165,15 +159,13 @@ public abstract class Session<C> implements TranscriptListener {
      * @param prompt Prompt
      * @param cancel Cancel callback
      */
-    public abstract void login(Proxy proxy, LoginCallback prompt, CancelCallback cancel) throws BackgroundException;
+    public abstract void login(LoginCallback prompt, CancelCallback cancel) throws BackgroundException;
 
     /**
      * Logout and close client connection
      */
     public void close() throws BackgroundException {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Connection will close to %s", host));
-        }
+        log.debug("Connection will close to {}", host);
         try {
             switch(state) {
                 case open:
@@ -184,9 +176,7 @@ public abstract class Session<C> implements TranscriptListener {
         }
         finally {
             state = State.closed;
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Connection did close to %s", host));
-            }
+            log.debug("Connection did close to {}", host);
         }
     }
 
@@ -200,9 +190,7 @@ public abstract class Session<C> implements TranscriptListener {
         }
         finally {
             state = State.closed;
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Connection did close to %s", host));
-            }
+            log.debug("Connection did close to {}", host);
         }
     }
 

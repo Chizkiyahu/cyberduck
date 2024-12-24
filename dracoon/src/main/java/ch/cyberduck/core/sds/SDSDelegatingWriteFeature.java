@@ -51,21 +51,11 @@ public class SDSDelegatingWriteFeature implements MultipartWrite<Node> {
     @Override
     public StatusOutputStream<Node> write(final Path file, final TransferStatus status, final ConnectionCallback callback) throws BackgroundException {
         if(new SDSTripleCryptEncryptorFeature(session, nodeid).isEncrypted(containerService.getContainer(file))) {
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Return encrypting writer for %s", file));
-            }
+            log.debug("Return encrypting writer for {}", file);
             // File key is set in encryption bulk feature if container is encrypted
             return new TripleCryptWriteFeature(session, nodeid, proxy).write(file, status, callback);
         }
         return proxy.write(file, status, callback);
-    }
-
-    @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        if(SDSAttributesAdapter.isEncrypted(containerService.getContainer(file).attributes())) {
-            return new TripleCryptWriteFeature(session, nodeid, proxy).append(file, status);
-        }
-        return proxy.append(file, status);
     }
 
     @Override

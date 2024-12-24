@@ -44,7 +44,7 @@ public class GoogleStorageReadFeature implements Read {
 
     public GoogleStorageReadFeature(final GoogleStorageSession session) {
         this.session = session;
-        this.containerService = session.getFeature(PathContainerService.class);
+        this.containerService = new GoogleStoragePathContainerService();
     }
 
     @Override
@@ -75,9 +75,7 @@ public class GoogleStorageReadFeature implements Read {
                 else {
                     header = String.format("bytes=%d-%d", range.getStart(), range.getEnd());
                 }
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Add range header %s for file %s", header, file));
-                }
+                log.debug("Add range header {} for file {}", header, file);
                 final HttpHeaders headers = request.getRequestHeaders();
                 headers.setRange(header);
                 // Disable compression

@@ -37,6 +37,7 @@ import org.apache.logging.log4j.Logger;
 import java.io.InputStream;
 import java.text.MessageFormat;
 import java.util.Objects;
+import java.util.Optional;
 
 public class DefaultCopyFeature implements Copy {
     private static final Logger log = LogManager.getLogger(DefaultCopyFeature.class);
@@ -62,17 +63,15 @@ public class DefaultCopyFeature implements Copy {
         out = writer.write(target, status, callback);
         new StreamCopier(status, status).withListener(listener).transfer(in, out);
         if(!PathAttributes.EMPTY.equals(status.getResponse())) {
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Received reply %s for creating file %s", status.getResponse(), target));
-            }
+            log.debug("Received reply {} for creating file {}", status.getResponse(), target);
             return new Path(target).withAttributes(status.getResponse());
         }
-        log.warn(String.format("Missing status from writer %s", writer));
+        log.warn("Missing status from writer {}", writer);
         return target;
     }
 
     @Override
-    public void preflight(final Path source, final Path target) throws BackgroundException {
+    public void preflight(final Path source, final Optional<Path> target) throws BackgroundException {
         switch(from.getHost().getProtocol().getType()) {
             case ftp:
             case irods:

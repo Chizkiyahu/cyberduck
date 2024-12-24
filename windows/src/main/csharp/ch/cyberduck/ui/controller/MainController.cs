@@ -18,41 +18,18 @@
 
 using ch.cyberduck.core;
 using ch.cyberduck.core.aquaticprime;
-using ch.cyberduck.core.azure;
-using ch.cyberduck.core.b2;
 using ch.cyberduck.core.bonjour;
-using ch.cyberduck.core.box;
-using ch.cyberduck.core.brick;
 using ch.cyberduck.core.ctera;
-using ch.cyberduck.core.dav;
-using ch.cyberduck.core.dropbox;
-using ch.cyberduck.core.eue;
 using ch.cyberduck.core.exception;
-using ch.cyberduck.core.ftp;
-using ch.cyberduck.core.googledrive;
-using ch.cyberduck.core.googlestorage;
-using ch.cyberduck.core.hubic;
 using ch.cyberduck.core.importer;
-using ch.cyberduck.core.irods;
 using ch.cyberduck.core.local;
-using ch.cyberduck.core.manta;
-using ch.cyberduck.core.nextcloud;
-using ch.cyberduck.core.nio;
 using ch.cyberduck.core.notification;
 using ch.cyberduck.core.oauth;
-using ch.cyberduck.core.onedrive;
-using ch.cyberduck.core.openstack;
-using ch.cyberduck.core.owncloud;
 using ch.cyberduck.core.pool;
 using ch.cyberduck.core.preferences;
 using ch.cyberduck.core.profiles;
-using ch.cyberduck.core.smb;
-using ch.cyberduck.core.s3;
-using ch.cyberduck.core.sds;
 using ch.cyberduck.core.serializer;
-using ch.cyberduck.core.sftp;
-using ch.cyberduck.core.spectra;
-using ch.cyberduck.core.storegate;
+using ch.cyberduck.core.serviceloader;
 using ch.cyberduck.core.threading;
 using ch.cyberduck.core.transfer;
 using ch.cyberduck.core.updater;
@@ -70,12 +47,14 @@ using StructureMap;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Reactive.Concurrency;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.ServiceModel;
 using System.ServiceModel.Description;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Web;
 using System.Windows.Forms;
 using System.Windows.Shell;
@@ -83,6 +62,8 @@ using System.Windows.Threading;
 using Windows.Services.Store;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.Shell;
+using XamlGeneratedNamespace;
+using static Windows.Win32.PInvoke;
 using Application = ch.cyberduck.core.local.Application;
 using UnhandledExceptionEventArgs = System.UnhandledExceptionEventArgs;
 
@@ -103,14 +84,7 @@ namespace Ch.Cyberduck.Ui.Controller
         private readonly BaseController _controller;
         private readonly PathKindDetector _detector = new DefaultPathKindDetector();
         private readonly SynchronizationContext mainThreadSync;
-
-        /// <summary>
-        /// Saved browsers
-        /// </summary>
-        private readonly AbstractHostCollection _sessions =
-            new BookmarkCollection(
-                LocalFactory.get(SupportDirectoryFinderFactory.get().find(), "Sessions"),
-                "session");
+        private readonly GeneratedApplication wpfHelper;
 
         private readonly CountdownEvent transfersSemaphore = new CountdownEvent(1);
 
@@ -125,6 +99,10 @@ namespace Ch.Cyberduck.Ui.Controller
         private WinSparkle.win_sparkle_shutdown_request_callback_t _shutdownRequestCallback;
         private PeriodicUpdateChecker _updater;
         private ServiceHost serviceHost;
+
+        public Dispatcher Dispatcher => wpfHelper.Dispatcher;
+
+        public SynchronizationContext SynchronizationContext => mainThreadSync;
 
         /// <summary>
         /// Default constructor.
@@ -148,20 +126,20 @@ namespace Ch.Cyberduck.Ui.Controller
                 AppDomain.CurrentDomain.UnhandledException += UnhandledExceptionHandler;
             }
 
-            // Initialize WindowsFormsSynchronizationContext (sets SynchronizationContext.Current)
+            foreach(Protocol p in AutoServiceLoaderFactory.get().load(typeof(Protocol)))
+            {
+                protocolFactory.register(p);
+            }
+
+            protocolFactory.load();
+            
             SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
             mainThreadSync = SynchronizationContext.Current;
-
-            protocolFactory.register(new FTPProtocol(), new FTPTLSProtocol(), new SFTPProtocol(), new DAVProtocol(), new SMBProtocol(),
-                new DAVSSLProtocol(), new SwiftProtocol(), new S3Protocol(), new GoogleStorageProtocol(),
-                new AzureProtocol(), new IRODSProtocol(), new SpectraProtocol(), new B2Protocol(), new DriveProtocol(),
-                new DropboxProtocol(), new HubicProtocol(), new LocalProtocol(), new OneDriveProtocol(), new SharepointProtocol(), new SharepointSiteProtocol(),
-                new MantaProtocol(), new SDSProtocol(), new StoregateProtocol(), new BrickProtocol(), new NextcloudProtocol(), new OwncloudProtocol(), new CteraProtocol(), new BoxProtocol(), new EueProtocol());
-            protocolFactory.load();
 
             Locator.SetLocator(new StructureMapBootstrapper.SplatDependencyResolver());
             Locator.CurrentMutable.InitializeSplat();
             Locator.CurrentMutable.InitializeReactiveUI();
+            wpfHelper = GeneratedApplication.OffThread();
 
             // Execute OnStartup later
             mainThreadSync.Post(OnStartup, null);
@@ -196,6 +174,7 @@ namespace Ch.Cyberduck.Ui.Controller
                 return false;
             }
 
+            AbstractHostCollection sessions = SessionsCollection.defaultCollection();
             // Determine if there are any open connections
             foreach (BrowserController controller in new List<BrowserController>(Browsers))
             {
@@ -208,7 +187,7 @@ namespace Ch.Cyberduck.Ui.Controller
                             new HostDictionary().deserialize(
                                 controller.Session.getHost().serialize(SerializerFactory.get()));
                         serialized.setWorkdir(controller.Workdir);
-                        Application._sessions.add(serialized);
+                        sessions.add(serialized);
                     }
                 }
             }
@@ -219,7 +198,7 @@ namespace Ch.Cyberduck.Ui.Controller
         {
             Logger.debug("ApplicationShouldTerminateAfterDonationPrompt");
             License l = LicenseFactory.find();
-            if (!l.verify(new DisabledLicenseVerifierCallback()))
+            if (!l.verify())
             {
                 string appVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
                 String lastversion = PreferencesFactory.get().getProperty("donate.reminder");
@@ -342,7 +321,7 @@ namespace Ch.Cyberduck.Ui.Controller
                                 {
                                     case -1: // Cancel
                                              // Quit has been interrupted. Delete any saved sessions so far.
-                                        Application._sessions.clear();
+                                        SessionsCollection.defaultCollection().clear();
                                         readyToExit = false;
                                         break;
 
@@ -528,11 +507,11 @@ namespace Ch.Cyberduck.Ui.Controller
         {
             Local f = LocalFactory.get(registrationPath);
             License license = LicenseFactory.get(f);
-            if (license.verify(new DisabledLicenseVerifierCallback()))
+            if (license.verify())
             {
                 f.copy(LocalFactory.get(SupportDirectoryFinderFactory.get().find(),
                     f.getName()));
-                _bc.InfoBox(license.ToString(),
+                _bc.InfoBox(license.getEntitlement(),
                     LocaleFactory.localizedString(
                         "Thanks for your support! Your contribution helps to further advance development to make Cyberduck even better.",
                         "License"),
@@ -583,13 +562,12 @@ namespace Ch.Cyberduck.Ui.Controller
 
         private static void InitializeProtocolHandler()
         {
-            var self = new Application(System.Windows.Forms.Application.ExecutablePath);
-            if (PreferencesFactory.get().getBoolean("defaulthandler.reminder") &&
-                            PreferencesFactory.get().getInteger("uses") > 0)
+            var handler = SchemeHandlerFactory.get();
+            var app = new Application(System.Windows.Forms.Application.ExecutablePath);
+            if (PreferencesFactory.get().getBoolean("defaulthandler.reminder") && PreferencesFactory.get().getInteger("uses") > 0)
             {
-                var handler = SchemeHandlerFactory.get();
                 if (
-                    !handler.isDefaultHandler(Arrays.asList(Scheme.ftp.name(), Scheme.ftps.name(), Scheme.sftp.name()), self))
+                    !handler.isDefaultHandler(Arrays.asList(Scheme.ftp.name(), Scheme.ftps.name(), Scheme.sftp.name()), app))
                 {
                     Core.Utils.CommandBox(LocaleFactory.localizedString("Default Protocol Handler", "Preferences"),
                         LocaleFactory.localizedString(
@@ -610,11 +588,28 @@ namespace Ch.Cyberduck.Ui.Controller
                             switch (option)
                             {
                                 case 0:
-                                    handler.setDefaultHandler(self,
+                                    handler.setDefaultHandler(app,
                                         Arrays.asList(Scheme.ftp.name(), Scheme.ftps.name(), Scheme.sftp.name()));
                                     break;
                             }
                         });
+                }
+            }
+            var protocols = Utils.ConvertFromJavaList<Protocol>(ProtocolFactory.get().find());
+            var schemes = Scheme.values().ToDictionary(x => x.name());
+            schemes.Remove(Scheme.s3.name());
+            foreach (var protocol in protocols)
+            {
+                foreach (var scheme in protocol.getSchemes())
+                {
+                    if (!schemes.ContainsKey(scheme))
+                    {
+                        if (Logger.isInfoEnabled())
+                        {
+                            Logger.info($"Register custom scheme {scheme}");
+                        }
+                        handler.setDefaultHandler(app, Arrays.asList(scheme));
+                    }
                 }
             }
         }
@@ -796,14 +791,15 @@ namespace Ch.Cyberduck.Ui.Controller
                 HistoryCollection.defaultCollection().load();
                 if (PreferencesFactory.get().getBoolean("browser.serialize"))
                 {
-                    _sessions.load();
+                    SessionsCollection.defaultCollection().load();
                 }
                 AbstractHostCollection c = BookmarkCollection.defaultCollection();
                 c.load();
                 bookmarksSemaphore.Signal();
             }, () =>
             {
-                foreach (Host host in _sessions)
+                AbstractHostCollection sessions = SessionsCollection.defaultCollection();
+                foreach (Host host in sessions)
                 {
                     Host h = host;
                     _bc.Invoke(delegate
@@ -813,7 +809,7 @@ namespace Ch.Cyberduck.Ui.Controller
                     });
                 }
 
-                if (_sessions.isEmpty())
+                if (sessions.isEmpty())
                 {
                     if (PreferencesFactory.get().getBoolean("browser.open.untitled"))
                     {
@@ -827,7 +823,7 @@ namespace Ch.Cyberduck.Ui.Controller
                         }
                     }
                 }
-                _sessions.clear();
+                sessions.clear();
             });
             HistoryCollection.defaultCollection().addListener(this);
         }
@@ -848,7 +844,7 @@ namespace Ch.Cyberduck.Ui.Controller
                 _bc.Invoke(() =>
                 {
                     transfersSemaphore.Wait();
-                    TransferController.Instance.View.Show();
+                    TransferController.Instance.ShowWindow();
                 });
             }
         }
@@ -968,6 +964,8 @@ namespace Ch.Cyberduck.Ui.Controller
 
         private void Shutdown(bool updating)
         {
+            wpfHelper.Dispatcher.InvokeShutdown();
+
             // Clear temporary files
             TemporaryFileServiceFactory.get().shutdown();
             try

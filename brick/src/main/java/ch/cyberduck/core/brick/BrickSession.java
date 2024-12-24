@@ -52,7 +52,7 @@ import ch.cyberduck.core.http.ExecutionCountServiceUnavailableRetryStrategy;
 import ch.cyberduck.core.http.HttpSession;
 import ch.cyberduck.core.local.BrowserLauncher;
 import ch.cyberduck.core.local.BrowserLauncherFactory;
-import ch.cyberduck.core.proxy.Proxy;
+import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.shared.DefaultHomeFinderService;
 import ch.cyberduck.core.ssl.X509KeyManager;
 import ch.cyberduck.core.ssl.X509TrustManager;
@@ -79,7 +79,7 @@ public class BrickSession extends HttpSession<CloseableHttpClient> {
     }
 
     @Override
-    protected CloseableHttpClient connect(final Proxy proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) {
+    protected CloseableHttpClient connect(final ProxyFinder proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) {
         final HttpClientBuilder configuration = builder.build(proxy, this, prompt);
         configuration.setServiceUnavailableRetryStrategy(new CustomServiceUnavailableRetryStrategy(host,
                 new ExecutionCountServiceUnavailableRetryStrategy(retryHandler = new BrickUnauthorizedRetryStrategy(this, prompt, cancel))));
@@ -89,16 +89,14 @@ public class BrickSession extends HttpSession<CloseableHttpClient> {
     }
 
     @Override
-    public void login(final Proxy proxy, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
+    public void login(final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
         final Credentials credentials = host.getCredentials();
         if(credentials.isPasswordAuthentication()) {
             retryHandler.setApiKey(credentials.getPassword());
             // Test credentials
             try {
                 final Path home = new DefaultHomeFinderService(this).find();
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Retrieved %s", home));
-                }
+                log.debug("Retrieved {}", home);
             }
             catch(LoginFailureException e) {
                 throw new LoginCanceledException(e);
@@ -132,9 +130,7 @@ public class BrickSession extends HttpSession<CloseableHttpClient> {
                             final String title, final String message,
                             final BrowserLauncher browser) throws BackgroundException {
         final String token = new BrickCredentialsConfigurator().configure(host).getToken();
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Attempt pairing with token %s", token));
-        }
+        log.debug("Attempt pairing with token {}", token);
         final BrickPairingSchedulerFeature scheduler = new BrickPairingSchedulerFeature(this, token, bookmark, cancel);
         // Operate in background until canceled
         final ConnectionCallback lock = new DisabledConnectionCallback() {

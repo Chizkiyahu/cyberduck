@@ -37,6 +37,7 @@ import org.apache.logging.log4j.Logger;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.text.MessageFormat;
+import java.util.Optional;
 
 import com.microsoft.azure.storage.AccessCondition;
 import com.microsoft.azure.storage.OperationContext;
@@ -51,7 +52,7 @@ public class AzureCopyFeature implements Copy {
     private final OperationContext context;
 
     private final PathContainerService containerService
-        = new DirectoryDelimiterPathContainerService();
+            = new DirectoryDelimiterPathContainerService();
 
     public AzureCopyFeature(final AzureSession session, final OperationContext context) {
         this.session = session;
@@ -62,21 +63,18 @@ public class AzureCopyFeature implements Copy {
     public Path copy(final Path source, final Path copy, final TransferStatus status, final ConnectionCallback callback, final StreamListener listener) throws BackgroundException {
         try {
             final CloudBlob target = session.getClient().getContainerReference(containerService.getContainer(copy).getName())
-                .getAppendBlobReference(containerService.getKey(copy));
+                    .getAppendBlobReference(containerService.getKey(copy));
             final CloudBlob blob = session.getClient().getContainerReference(containerService.getContainer(source).getName())
-                .getBlobReferenceFromServer(containerService.getKey(source));
+                    .getBlobReferenceFromServer(containerService.getKey(source));
             final BlobRequestOptions options = new BlobRequestOptions();
             options.setStoreBlobContentMD5(new HostPreferences(session.getHost()).getBoolean("azure.upload.md5"));
             final URI s = session.getHost().getCredentials().isTokenAuthentication() ?
-                URI.create(blob.getUri().toString() + session.getHost().getCredentials().getToken()) : blob.getUri();
+                    URI.create(blob.getUri().toString() + session.getHost().getCredentials().getToken()) : blob.getUri();
             final String id = target.startCopy(s,
-                AccessCondition.generateEmptyCondition(), AccessCondition.generateEmptyCondition(), options, context);
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Started copy for %s with copy operation ID %s", copy, id));
-            }
+                    AccessCondition.generateEmptyCondition(), AccessCondition.generateEmptyCondition(), options, context);
+            log.debug("Started copy for {} with copy operation ID {}", copy, id);
             listener.sent(status.getLength());
-            // Copy original file attributes
-            return copy.withAttributes(new AzureAttributesFinderFeature(session, context).find(copy));
+            return copy;
         }
         catch(StorageException e) {
             throw new AzureExceptionMappingService().map("Cannot copy {0}", e, source);
@@ -87,12 +85,14 @@ public class AzureCopyFeature implements Copy {
     }
 
     @Override
-    public void preflight(final Path source, final Path target) throws BackgroundException {
+    public void preflight(final Path source, final Optional<Path> target) throws BackgroundException {
         if(containerService.isContainer(source)) {
             throw new UnsupportedException(MessageFormat.format(LocaleFactory.localizedString("Cannot copy {0}", "Error"), source.getName())).withFile(source);
         }
-        if(containerService.isContainer(target)) {
-            throw new UnsupportedException(MessageFormat.format(LocaleFactory.localizedString("Cannot copy {0}", "Error"), source.getName())).withFile(source);
+        if(target.isPresent()) {
+            if(containerService.isContainer(target.get())) {
+                throw new UnsupportedException(MessageFormat.format(LocaleFactory.localizedString("Cannot copy {0}", "Error"), source.getName())).withFile(source);
+            }
         }
     }
 }

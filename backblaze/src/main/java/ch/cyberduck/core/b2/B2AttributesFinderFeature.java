@@ -68,9 +68,9 @@ public class B2AttributesFinderFeature implements AttributesFinder, AttributesAd
         }
         if(file.getType().contains(Path.Type.upload)) {
             // Pending large file upload
-            final Write.Append append = new B2WriteFeature(session, fileid).append(file, new TransferStatus());
+            final Write.Append append = new B2LargeUploadService(session, fileid, new B2WriteFeature(session, fileid)).append(file, new TransferStatus());
             if(append.append) {
-                return new PathAttributes().withSize(append.size);
+                return new PathAttributes().withSize(append.offset);
             }
             return PathAttributes.EMPTY;
         }
@@ -106,9 +106,7 @@ public class B2AttributesFinderFeature implements AttributesFinder, AttributesAd
             if(attr.isDuplicate()) {
                 // Throw failure if latest version has hide marker set and lookup was without explicit version
                 if(StringUtils.isBlank(file.attributes().getVersionId())) {
-                    if(log.isDebugEnabled()) {
-                        log.debug(String.format("Latest version of %s is duplicate", file));
-                    }
+                    log.debug("Latest version of {} is duplicate", file);
                     throw new NotfoundException(file.getAbsolute());
                 }
             }
@@ -142,7 +140,7 @@ public class B2AttributesFinderFeature implements AttributesFinder, AttributesAd
         if(response instanceof B2FinishLargeFileResponse) {
             return this.toAttributes((B2FinishLargeFileResponse) response);
         }
-        log.error(String.format("Unknown type %s", response));
+        log.error("Unknown type {}", response);
         return PathAttributes.EMPTY;
     }
 
@@ -165,7 +163,7 @@ public class B2AttributesFinderFeature implements AttributesFinder, AttributesAd
                 attributes.setModificationDate(Long.parseLong(value));
             }
             catch(NumberFormatException e) {
-                log.warn(String.format("Failure parsing src_last_modified_millis with value %s", value));
+                log.warn("Failure parsing src_last_modified_millis with value {}", value);
             }
         }
         else {
@@ -177,7 +175,7 @@ public class B2AttributesFinderFeature implements AttributesFinder, AttributesAd
                 attributes.setCreationDate(Long.parseLong(value));
             }
             catch(NumberFormatException e) {
-                log.warn(String.format("Failure parsing src_creation_date_millis with value %s", value));
+                log.warn("Failure parsing src_creation_date_millis with value {}", value);
             }
         }
         if(response.getAction() != null) {
@@ -216,7 +214,7 @@ public class B2AttributesFinderFeature implements AttributesFinder, AttributesAd
                 attributes.setModificationDate(Long.parseLong(value));
             }
             catch(NumberFormatException e) {
-                log.warn(String.format("Failure parsing src_last_modified_millis with value %s", value));
+                log.warn("Failure parsing src_last_modified_millis with value {}", value);
             }
         }
         else {
@@ -228,7 +226,7 @@ public class B2AttributesFinderFeature implements AttributesFinder, AttributesAd
                 attributes.setCreationDate(Long.parseLong(value));
             }
             catch(NumberFormatException e) {
-                log.warn(String.format("Failure parsing src_creation_date_millis with value %s", value));
+                log.warn("Failure parsing src_creation_date_millis with value {}", value);
             }
         }
         if(response.getAction() != null) {

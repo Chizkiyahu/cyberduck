@@ -28,7 +28,6 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Paths;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFileAttributes;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -49,7 +48,7 @@ public class LocalAttributes extends Attributes {
             return Files.getLastModifiedTime(Paths.get(path)).toMillis();
         }
         catch(IOException e) {
-            log.warn(String.format("Failure getting timestamp of %s. %s", path, e.getMessage()));
+            log.warn("Failure getting timestamp of {}. {}", path, e.getMessage());
             return -1L;
         }
     }
@@ -88,7 +87,7 @@ public class LocalAttributes extends Attributes {
             return Files.size(Paths.get(path));
         }
         catch(IOException e) {
-            log.warn(String.format("Failure getting size of %s. %s", path, e.getMessage()));
+            log.warn("Failure getting size of {}. {}", path, e.getMessage());
             return -1L;
         }
     }
@@ -96,7 +95,6 @@ public class LocalAttributes extends Attributes {
     @Override
     public Permission getPermission() {
         if(FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
-            final BasicFileAttributes attributes;
             try {
                 return new LocalPermission(PosixFilePermissions.toString(Files.readAttributes(Paths.get(path), PosixFileAttributes.class, LinkOption.NOFOLLOW_LINKS).permissions()));
             }

@@ -35,6 +35,7 @@ import ch.cyberduck.core.ssl.ThreadLocalHostnameDelegatingTrustManager;
 import ch.cyberduck.core.ssl.X509KeyManager;
 
 import org.apache.http.HttpHost;
+import org.apache.http.HttpRequest;
 import org.apache.http.auth.AuthSchemeProvider;
 import org.apache.http.client.config.AuthSchemes;
 import org.apache.http.client.config.RequestConfig;
@@ -56,6 +57,8 @@ import org.apache.http.impl.client.DefaultClientConnectionReuseStrategy;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.client.WinHttpClients;
+import org.apache.http.impl.conn.DefaultRoutePlanner;
+import org.apache.http.impl.conn.DefaultSchemePortResolver;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.protocol.HttpContext;
 import org.apache.logging.log4j.LogManager;
@@ -136,26 +139,29 @@ public class HttpConnectionPoolBuilder {
     }
 
     /**
-     * @param proxy    Proxy configuration
+     * @param proxyfinder    Proxy configuration
      * @param listener Log listener
      * @param prompt   Prompt for proxy credentials
      * @return Builder for HTTP client
      */
-    public HttpClientBuilder build(final Proxy proxy, final TranscriptListener listener, final LoginCallback prompt) {
+    public HttpClientBuilder build(final ProxyFinder proxyfinder, final TranscriptListener listener, final LoginCallback prompt) {
         final HttpClientBuilder configuration = HttpClients.custom();
-        // Use HTTP Connect proxy implementation provided here instead of
-        // relying on internal proxy support in socket factory
-        switch(proxy.getType()) {
-            case HTTP:
-            case HTTPS:
-                final HttpHost h = new HttpHost(proxy.getHostname(), proxy.getPort(), Scheme.http.name());
-                if(log.isInfoEnabled()) {
-                    log.info(String.format("Setup proxy %s", h));
+        configuration.setRoutePlanner(new DefaultRoutePlanner(DefaultSchemePortResolver.INSTANCE) {
+            @Override
+            protected HttpHost determineProxy(final HttpHost target, final HttpRequest request, final HttpContext context) {
+                // Use HTTP Connect proxy implementation provided here instead of relying on internal proxy support in socket factory
+                final Proxy proxy = proxyfinder.find(target.toURI());
+                switch(proxy.getType()) {
+                    case HTTP:
+                    case HTTPS:
+                        final HttpHost h = new HttpHost(proxy.getHostname(), proxy.getPort(), Scheme.http.name());
+                        log.info("Setup proxy {}", h);
+                        return h;
                 }
-                configuration.setProxy(h);
-                configuration.setProxyAuthenticationStrategy(new CallbackProxyAuthenticationStrategy(ProxyCredentialsStoreFactory.get(), host, prompt));
-                break;
-        }
+                return null;
+            }
+        });
+        configuration.setProxyAuthenticationStrategy(new CallbackProxyAuthenticationStrategy(ProxyCredentialsStoreFactory.get(), host, prompt));
         configuration.setUserAgent(new PreferencesUseragentProvider().get());
         final int timeout = connectionTimeout.getTimeout() * 1000;
         configuration.setDefaultSocketConfig(SocketConfig.custom()
@@ -173,6 +179,9 @@ public class HttpConnectionPoolBuilder {
         else {
             configuration.setConnectionReuseStrategy(new NoConnectionReuseStrategy());
         }
+        if(!new HostPreferences(host).getBoolean("http.connections.state.enable")) {
+            configuration.disableConnectionState();
+        }
         // Retry handler for I/O failures
         configuration.setRetryHandler(new ExtendedHttpRequestRetryHandler(
                 new HostPreferences(host).getInteger("connection.retry")));
@@ -181,7 +190,7 @@ public class HttpConnectionPoolBuilder {
         if(!new HostPreferences(host).getBoolean("http.compression.enable")) {
             configuration.disableContentCompression();
         }
-        configuration.setRequestExecutor(new LoggingHttpRequestExecutor(listener));
+        configuration.setRequestExecutor(new CustomHttpRequestExecutor(host, listener));
         // Always register HTTP for possible use with proxy. Contains a number of protocol properties such as the
         // default port and the socket factory to be used to create the java.net.Socket instances for the given protocol
         final PoolingHttpClientConnectionManager connectionManager = this.createConnectionManager(this.createRegistry());
@@ -198,9 +207,10 @@ public class HttpConnectionPoolBuilder {
                         new BackportWindowsNegotiateSchemeFactory(null) :
                         new SPNegoSchemeFactory())
                 .register(AuthSchemes.KERBEROS, new KerberosSchemeFactory()).build());
-        configuration.setDnsResolver(new CustomDnsResolver());
         if(new HostPreferences(host).getBoolean("connection.retry.backoff.enable")) {
-            configuration.setBackoffManager(new AIMDBackoffManager(connectionManager));
+            final AIMDBackoffManager manager = new AIMDBackoffManager(connectionManager);
+            manager.setPerHostConnectionCap(new HostPreferences(host).getInteger("http.connections.route"));
+            configuration.setBackoffManager(manager);
             configuration.setConnectionBackoffStrategy(new CustomConnectionBackoffStrategy(host));
         }
         return configuration;
@@ -227,10 +237,8 @@ public class HttpConnectionPoolBuilder {
     }
 
     public PoolingHttpClientConnectionManager createConnectionManager(final Registry<ConnectionSocketFactory> registry) {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Setup connection pool with registry %s", registry));
-        }
-        final PoolingHttpClientConnectionManager manager = new PoolingHttpClientConnectionManager(registry);
+        log.debug("Setup connection pool with registry {}", registry);
+        final PoolingHttpClientConnectionManager manager = new PoolingHttpClientConnectionManager(registry, new CustomDnsResolver());
         manager.setMaxTotal(new HostPreferences(host).getInteger("http.connections.total"));
         manager.setDefaultMaxPerRoute(new HostPreferences(host).getInteger("http.connections.route"));
         // Detect connections that have become stale (half-closed) while kept inactive in the pool

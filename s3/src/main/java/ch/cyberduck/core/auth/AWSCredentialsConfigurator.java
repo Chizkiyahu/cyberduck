@@ -51,9 +51,7 @@ public class AWSCredentialsConfigurator implements CredentialsConfigurator {
             for(AWSCredentialsProvider provider : providers) {
                 try {
                     final AWSCredentials c = provider.getCredentials();
-                    if(log.isDebugEnabled()) {
-                        log.debug(String.format("Configure %s with %s", host, c));
-                    }
+                    log.debug("Configure {} with {}", host, c);
                     credentials.setUsername(c.getAWSAccessKeyId());
                     credentials.setPassword(c.getAWSSecretKey());
                     if(c instanceof AWSSessionCredentials) {
@@ -62,20 +60,18 @@ public class AWSCredentialsConfigurator implements CredentialsConfigurator {
                     break;
                 }
                 catch(SdkClientException e) {
-                    log.debug(String.format("Ignore failure loading credentials from provider %s", provider));
+                    log.debug("Ignore failure loading credentials from provider {}", provider);
                     // Continue searching with next provider
                 }
             }
             return credentials;
         }
-        return host.getCredentials();
+        return CredentialsConfigurator.DISABLED.configure(host);
     }
 
     @Override
     public CredentialsConfigurator reload() throws LoginCanceledException {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Reload from %s", Arrays.toString(providers)));
-        }
+        log.debug("Reload from {}", Arrays.toString(providers));
         for(AWSCredentialsProvider provider : providers) {
             provider.refresh();
         }

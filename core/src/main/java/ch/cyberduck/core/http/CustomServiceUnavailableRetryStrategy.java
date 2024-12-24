@@ -19,13 +19,12 @@ import ch.cyberduck.core.Host;
 import ch.cyberduck.core.preferences.HostPreferences;
 
 import org.apache.http.HttpResponse;
-import org.apache.http.HttpStatus;
 import org.apache.http.client.ServiceUnavailableRetryStrategy;
 import org.apache.http.protocol.HttpContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class CustomServiceUnavailableRetryStrategy extends ExecutionCountServiceUnavailableRetryStrategy {
+public class CustomServiceUnavailableRetryStrategy extends ChainedServiceUnavailableRetryStrategy {
     private static final Logger log = LogManager.getLogger(CustomServiceUnavailableRetryStrategy.class);
 
     private final Host host;
@@ -34,44 +33,22 @@ public class CustomServiceUnavailableRetryStrategy extends ExecutionCountService
         this(host, new DisabledServiceUnavailableRetryStrategy());
     }
 
-    public CustomServiceUnavailableRetryStrategy(final Host host, final ServiceUnavailableRetryStrategy proxy) {
-        super(new HostPreferences(host).getInteger("connection.retry"), proxy);
+    public CustomServiceUnavailableRetryStrategy(final Host host, final ServiceUnavailableRetryStrategy... chain) {
+        this(host, new HostPreferences(host).getInteger("connection.retry"), chain);
+    }
+
+    public CustomServiceUnavailableRetryStrategy(final Host host, final int executionCount, final ServiceUnavailableRetryStrategy... chain) {
+        super(new ChainedServiceUnavailableRetryStrategy(new ExecutionCountServiceUnavailableRetryStrategy(
+                executionCount, new DefaultServiceUnavailableRetryStrategy(host)), new ChainedServiceUnavailableRetryStrategy(chain)));
         this.host = host;
     }
 
     @Override
     public boolean retryRequest(final HttpResponse response, final int executionCount, final HttpContext context) {
-        if(executionCount > new HostPreferences(host).getInteger("connection.retry")) {
-            return false;
-        }
         // Proxy to chain
         if(super.retryRequest(response, executionCount, context)) {
-            if(log.isWarnEnabled()) {
-                log.warn(String.format("Allow retry for response %s if repeatable", response));
-            }
+            log.warn("Allow retry for response {} if repeatable", response);
             return true;
-        }
-        final boolean retry = this.evaluate(response);
-        if(retry) {
-            if(log.isWarnEnabled()) {
-                log.warn(String.format("Allow retry for response %s if repeatable", response));
-            }
-        }
-        return retry;
-    }
-
-    /**
-     * @param response Server response
-     * @return True if request should be retried given the HTTP response
-     */
-    protected boolean evaluate(final HttpResponse response) {
-        // Apply default if not handled
-        switch(response.getStatusLine().getStatusCode()) {
-            case HttpStatus.SC_SERVICE_UNAVAILABLE:
-            case HttpStatus.SC_GATEWAY_TIMEOUT:
-            case HttpStatus.SC_INTERNAL_SERVER_ERROR:
-            case HttpStatus.SC_REQUEST_TIMEOUT:
-                return true;
         }
         return false;
     }

@@ -15,6 +15,11 @@ package ch.cyberduck.core.onedrive;
  * GNU General Public License for more details.
  */
 
+import ch.cyberduck.core.Protocol;
+
+import com.google.auto.service.AutoService;
+
+@AutoService(Protocol.class)
 public class SharepointProtocol extends GraphProtocol {
     @Override
     public String getIdentifier() {
@@ -44,5 +49,10 @@ public class SharepointProtocol extends GraphProtocol {
     @Override
     public VersioningMode getVersioningMode() {
         return VersioningMode.storage;
+    }
+
+    @Override
+    public Case getCaseSensitivity() {
+        return Case.insensitive;
     }
 }

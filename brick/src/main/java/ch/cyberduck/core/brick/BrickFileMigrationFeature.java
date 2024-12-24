@@ -74,12 +74,12 @@ public class BrickFileMigrationFeature {
                             signal.countDown();
                             return;
                         default:
-                            log.warn(String.format("Wait for copy to complete with current status %s", migration));
+                            log.warn("Wait for copy to complete with current status {}", migration);
                             break;
                     }
                 }
                 catch(ApiException e) {
-                    log.warn(String.format("Failure processing scheduled task. %s", e.getMessage()), e);
+                    log.warn(String.format("Failure processing scheduled task. %s", e.getMessage()));
                     failure.set(new BrickExceptionMappingService().map(e));
                     signal.countDown();
                 }
@@ -100,7 +100,7 @@ public class BrickFileMigrationFeature {
             }
         }
         finally {
-            scheduler.shutdown();
+            scheduler.shutdown(true);
         }
     }
 

@@ -63,9 +63,7 @@ public class SMBListService implements ListService {
             for(FileIdBothDirectoryInformation f : info) {
                 final String filename = f.getFileName();
                 if(filename.equals(".") || filename.equals("..")) {
-                    if(log.isDebugEnabled()) {
-                        log.debug(String.format("Skip %s", f.getFileName()));
-                    }
+                    log.debug("Skip {}", f.getFileName());
                     continue;
                 }
                 final EnumSet<Type> type = EnumSet.noneOf(Type.class);
@@ -84,9 +82,6 @@ public class SMBListService implements ListService {
                 attr.setSize(f.getEndOfFile());
                 attr.setDisplayname(f.getFileName());
                 result.add(new Path(directory, filename, type, attr));
-                listener.chunk(directory, result);
-            }
-            if(result.isEmpty()) {
                 listener.chunk(directory, result);
             }
         }

@@ -9,9 +9,9 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Storage.FileSystem;
+using Windows.Win32.UI.Controls;
 using Windows.Win32.UI.Shell;
 using Windows.Win32.UI.WindowsAndMessaging;
-using Windows.Win32.UI.Controls;
 using static System.Runtime.CompilerServices.Unsafe;
 using static Windows.Win32.CorePInvoke;
 using static Windows.Win32.CoreRefreshMethods;
@@ -21,7 +21,7 @@ using Path = System.IO.Path;
 
 namespace Ch.Cyberduck.Core.Refresh.Services
 {
-    public abstract class IconProvider
+    public abstract partial class IconProvider
     {
         public IconProvider(IconCache iconCache, IIconProviderImageSource imageSource)
         {
@@ -43,9 +43,11 @@ namespace Ch.Cyberduck.Core.Refresh.Services
         }
     }
 
-    public abstract class IconProvider<T> : IconProvider
+    public abstract partial class IconProvider<T> : IconProvider
     {
         protected static readonly Logger Log = LogManager.getLogger(typeof(T));
+
+        private static char[] PathSeparatorChars => [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, Path.VolumeSeparatorChar];
 
         protected IconProvider(IconCache iconCache, IIconProviderImageSource imageSource) : base(iconCache, imageSource)
         {
@@ -105,17 +107,23 @@ namespace Ch.Cyberduck.Core.Refresh.Services
         public T GetFileIcon(string filename, bool isFolder, bool large, bool isExecutable)
         {
             string key = string.Empty;
+            string fileInfo = filename;
             if (isFolder)
             {
                 key = "folder";
+                fileInfo = "_unknown";
             }
-            else if (isExecutable)
-            {
-                key = filename;
-            }
-            else if (filename.LastIndexOf('.') is int index && index != -1)
+            else if (!isExecutable
+                && filename.LastIndexOf('.') is int index && index != -1
+                && filename.IndexOfAny(PathSeparatorChars, index) == -1)
             {
                 key = filename.Substring(index + 1);
+                fileInfo = filename.Substring(index);
+            }
+            else
+            {
+                key = filename.ToUpperInvariant().GetHashCode().ToString("X4");
+                IconCache.Temporary("ext", key);
             }
 
             if (IconCache.TryGetIcon("ext", large ? 32 : 16, out T image, key))
@@ -131,7 +139,7 @@ namespace Ch.Cyberduck.Core.Refresh.Services
             SHFILEINFOW shfi = new();
             try
             {
-                if (SHGetFileInfo(isFolder ? "_unknown" : filename, fileAttributes, shfi, flags) == 0)
+                if (SHGetFileInfo(fileInfo, fileAttributes, shfi, flags) == 0)
                 {
                     return default;
                 }
@@ -214,5 +222,7 @@ namespace Ch.Cyberduck.Core.Refresh.Services
         protected abstract T Get(IntPtr nativeIcon, CacheIconCallback cacheIcon);
 
         protected abstract T NearestFit(IEnumerable<T> sources, int size, CacheIconCallback cacheCallback);
+
+        protected abstract T Overlay(T baseImage, T overlay, int size);
     }
 }

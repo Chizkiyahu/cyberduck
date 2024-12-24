@@ -43,14 +43,17 @@ public interface Touch<Reply> {
         }
     }
 
-    Touch<Reply> withWriter(Write<Reply> writer);
+    default Touch<Reply> withWriter(Write<Reply> writer) {
+        return this;
+    }
 
     /**
      * @throws AccessDeniedException Permission failure for target directory
      */
     default void preflight(final Path workdir, final String filename) throws BackgroundException {
         if(!workdir.attributes().getPermission().isWritable()) {
-            throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Upload {0} failed", "Error"), filename));
+            throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString(
+                    "Cannot create {0}", "Error"), filename)).withFile(workdir);
         }
     }
 }

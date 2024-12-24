@@ -19,7 +19,7 @@
     <parent>
         <artifactId>parent</artifactId>
         <groupId>ch.cyberduck</groupId>
-        <version>8.8.1</version>
+        <version>9.1.2-SNAPSHOT</version>
     </parent>
     <artifactId>dracoon</artifactId>
 
@@ -44,7 +44,7 @@
         <dependency>
             <groupId>com.dracoon</groupId>
             <artifactId>dracoon-crypto-sdk</artifactId>
-            <version>2.1.0</version>
+            <version>3.0.1</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.bouncycastle</groupId>

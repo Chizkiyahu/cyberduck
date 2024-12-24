@@ -66,13 +66,8 @@ public class DriveWriteFeature extends AbstractHttpWriteFeature<File> implements
     }
 
     @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        return new Append(false).withStatus(status);
-    }
-
-    @Override
     public EnumSet<Flags> features(final Path file) {
-        return EnumSet.of(Flags.timestamp);
+        return EnumSet.of(Flags.timestamp, Flags.mime);
     }
 
     @Override
@@ -136,8 +131,8 @@ public class DriveWriteFeature extends AbstractHttpWriteFeature<File> implements
                                 }
                                 break;
                             default:
-                                throw new DefaultHttpResponseExceptionMappingService().map(
-                                        new HttpResponseException(postResponse.getStatusLine().getStatusCode(), postResponse.getStatusLine().getReasonPhrase()));
+                                throw new DefaultHttpResponseExceptionMappingService().map("Upload {0} failed",
+                                        new HttpResponseException(postResponse.getStatusLine().getStatusCode(), postResponse.getStatusLine().getReasonPhrase()), file);
                         }
                     }
                     finally {
@@ -159,8 +154,8 @@ public class DriveWriteFeature extends AbstractHttpWriteFeature<File> implements
                                         fileid.cache(file, response.getId());
                                         return response;
                                     default:
-                                        throw new DefaultHttpResponseExceptionMappingService().map(
-                                                new HttpResponseException(putResponse.getStatusLine().getStatusCode(), putResponse.getStatusLine().getReasonPhrase()));
+                                        throw new DefaultHttpResponseExceptionMappingService().map("Upload {0} failed",
+                                                new HttpResponseException(putResponse.getStatusLine().getStatusCode(), putResponse.getStatusLine().getReasonPhrase()), file);
                                 }
                             }
                             finally {
@@ -168,8 +163,8 @@ public class DriveWriteFeature extends AbstractHttpWriteFeature<File> implements
                             }
                         }
                         else {
-                            throw new DefaultHttpResponseExceptionMappingService().map(
-                                    new HttpResponseException(postResponse.getStatusLine().getStatusCode(), postResponse.getStatusLine().getReasonPhrase()));
+                            throw new DefaultHttpResponseExceptionMappingService().map("Upload {0} failed",
+                                    new HttpResponseException(postResponse.getStatusLine().getStatusCode(), postResponse.getStatusLine().getReasonPhrase()), file);
                         }
                     }
                     return null;

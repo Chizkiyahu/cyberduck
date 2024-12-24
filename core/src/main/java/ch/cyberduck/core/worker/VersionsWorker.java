@@ -29,7 +29,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.text.MessageFormat;
-import java.util.Collections;
 import java.util.Objects;
 
 public class VersionsWorker extends Worker<AttributedList<Path>> {
@@ -46,11 +45,13 @@ public class VersionsWorker extends Worker<AttributedList<Path>> {
     @Override
     public AttributedList<Path> run(final Session<?> session) throws BackgroundException {
         final Versioning feature = session.getFeature(Versioning.class);
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Run with feature %s", feature));
-        }
+        log.debug("Run with feature {}", feature);
         if(feature.getConfiguration(file).isEnabled()) {
-            return feature.list(file, listener);
+            final AttributedList<Path> list = feature.list(file, listener);
+            if(list.isEmpty()) {
+                listener.chunk(file.getParent(), list);
+            }
+            return list;
         }
         return AttributedList.emptyList();
     }

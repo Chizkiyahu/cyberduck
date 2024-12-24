@@ -16,6 +16,7 @@ package ch.cyberduck.core.s3;
  */
 
 import ch.cyberduck.core.DisabledLoginCallback;
+import ch.cyberduck.core.DisabledProgressListener;
 import ch.cyberduck.core.Host;
 import ch.cyberduck.core.Local;
 import ch.cyberduck.core.Path;
@@ -55,7 +56,8 @@ public class S3SingleUploadServiceTest extends AbstractS3Test {
 
     @Test
     public void testUpload() throws Exception {
-        final S3SingleUploadService service = new S3SingleUploadService(session, new S3WriteFeature(session, new S3AccessControlListFeature(session)));
+        final S3AccessControlListFeature acl = new S3AccessControlListFeature(session);
+        final S3SingleUploadService service = new S3SingleUploadService(session, new S3WriteFeature(session, acl));
         final Path container = new Path("test-eu-central-1-cyberduck", EnumSet.of(Path.Type.directory, Path.Type.volume));
         final String name = UUID.randomUUID() + ".txt";
         final Path test = new Path(container, name, EnumSet.of(Path.Type.file));
@@ -68,19 +70,20 @@ public class S3SingleUploadServiceTest extends AbstractS3Test {
         status.setLength(random.length);
         status.setMime("text/plain");
         service.upload(test, local, new BandwidthThrottle(BandwidthThrottle.UNLIMITED),
-                new DisabledStreamListener(), status, new DisabledLoginCallback());
-        assertTrue(new S3FindFeature(session, new S3AccessControlListFeature(session)).find(test));
-        final PathAttributes attr = new S3AttributesFinderFeature(session, new S3AccessControlListFeature(session)).find(test);
+                new DisabledProgressListener(), new DisabledStreamListener(), status, new DisabledLoginCallback());
+        assertTrue(new S3FindFeature(session, acl).find(test));
+        final PathAttributes attr = new S3AttributesFinderFeature(session, acl).find(test);
         assertEquals(status.getResponse().getChecksum(), attr.getChecksum());
         assertEquals(status.getResponse().getETag(), attr.getETag());
         assertEquals(random.length, attr.getSize());
-        new S3DefaultDeleteFeature(session).delete(Collections.singletonList(test), new DisabledLoginCallback(), new Delete.DisabledCallback());
+        new S3DefaultDeleteFeature(session, acl).delete(Collections.singletonList(test), new DisabledLoginCallback(), new Delete.DisabledCallback());
         local.delete();
     }
 
     @Test
     public void testUploadSSE() throws Exception {
-        final S3SingleUploadService service = new S3SingleUploadService(session, new S3WriteFeature(session, new S3AccessControlListFeature(session)));
+        final S3AccessControlListFeature acl = new S3AccessControlListFeature(session);
+        final S3SingleUploadService service = new S3SingleUploadService(session, new S3WriteFeature(session, acl));
         final Path container = new Path("test-eu-central-1-cyberduck", EnumSet.of(Path.Type.directory, Path.Type.volume));
         final String name = UUID.randomUUID() + ".txt";
         final Path test = new Path(container, name, EnumSet.of(Path.Type.file));
@@ -93,17 +96,18 @@ public class S3SingleUploadServiceTest extends AbstractS3Test {
         status.setLength(random.length);
         status.setEncryption(KMSEncryptionFeature.SSE_KMS_DEFAULT);
         service.upload(test, local, new BandwidthThrottle(BandwidthThrottle.UNLIMITED),
-                new DisabledStreamListener(), status, new DisabledLoginCallback());
-        assertTrue(new S3FindFeature(session, new S3AccessControlListFeature(session)).find(test));
-        final PathAttributes attributes = new S3AttributesFinderFeature(session, new S3AccessControlListFeature(session)).find(test);
+                new DisabledProgressListener(), new DisabledStreamListener(), status, new DisabledLoginCallback());
+        assertTrue(new S3FindFeature(session, acl).find(test));
+        final PathAttributes attributes = new S3AttributesFinderFeature(session, acl).find(test);
         assertEquals(random.length, attributes.getSize());
-        new S3DefaultDeleteFeature(session).delete(Collections.singletonList(test), new DisabledLoginCallback(), new Delete.DisabledCallback());
+        new S3DefaultDeleteFeature(session, acl).delete(Collections.singletonList(test), new DisabledLoginCallback(), new Delete.DisabledCallback());
         local.delete();
     }
 
     @Test
     public void testUploadWithSHA256Checksum() throws Exception {
-        final S3SingleUploadService service = new S3SingleUploadService(session, new S3WriteFeature(session, new S3AccessControlListFeature(session)));
+        final S3AccessControlListFeature acl = new S3AccessControlListFeature(session);
+        final S3SingleUploadService service = new S3SingleUploadService(session, new S3WriteFeature(session, acl));
         final Path container = new Path("test-eu-central-1-cyberduck", EnumSet.of(Path.Type.directory, Path.Type.volume));
         final String name = UUID.randomUUID() + ".txt";
         final Path test = new Path(container, name, EnumSet.of(Path.Type.file));
@@ -115,11 +119,11 @@ public class S3SingleUploadServiceTest extends AbstractS3Test {
         final TransferStatus status = new TransferStatus();
         status.setLength(random.length);
         service.upload(test, local, new BandwidthThrottle(BandwidthThrottle.UNLIMITED),
-                new DisabledStreamListener(), status, new DisabledLoginCallback());
-        assertTrue(new S3FindFeature(session, new S3AccessControlListFeature(session)).find(test));
-        final PathAttributes attributes = new S3AttributesFinderFeature(session, new S3AccessControlListFeature(session)).find(test);
+                new DisabledProgressListener(), new DisabledStreamListener(), status, new DisabledLoginCallback());
+        assertTrue(new S3FindFeature(session, acl).find(test));
+        final PathAttributes attributes = new S3AttributesFinderFeature(session, acl).find(test);
         assertEquals(random.length, attributes.getSize());
-        new S3DefaultDeleteFeature(session).delete(Collections.singletonList(test), new DisabledLoginCallback(), new Delete.DisabledCallback());
+        new S3DefaultDeleteFeature(session, acl).delete(Collections.singletonList(test), new DisabledLoginCallback(), new Delete.DisabledCallback());
         local.delete();
     }
 
@@ -131,7 +135,7 @@ public class S3SingleUploadServiceTest extends AbstractS3Test {
         final Local local = new Local(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
         LocalTouchFactory.get().touch(local);
         final TransferStatus status = new TransferStatus();
-        m.upload(test, local, new BandwidthThrottle(BandwidthThrottle.UNLIMITED), new DisabledStreamListener(),
+        m.upload(test, local, new BandwidthThrottle(BandwidthThrottle.UNLIMITED), new DisabledProgressListener(), new DisabledStreamListener(),
                 status, new DisabledLoginCallback());
     }
 }

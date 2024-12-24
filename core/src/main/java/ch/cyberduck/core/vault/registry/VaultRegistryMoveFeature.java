@@ -33,6 +33,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Optional;
 
 public class VaultRegistryMoveFeature implements Move {
     private static final Logger log = LogManager.getLogger(VaultRegistryMoveFeature.class);
@@ -53,9 +54,7 @@ public class VaultRegistryMoveFeature implements Move {
     public Path move(final Path source, final Path target, final TransferStatus status, final Delete.Callback delete, final ConnectionCallback callback) throws BackgroundException {
         final Vault vault = registry.find(session, source);
         if(vault.equals(registry.find(session, target, false))) {
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Move %s to %s inside vault %s", source, target, vault));
-            }
+            log.debug("Move {} to {} inside vault {}", source, target, vault);
             // Move files inside vault
             return vault.getFeature(session, Move.class, proxy).move(source, target, status, delete, callback);
         }
@@ -85,17 +84,23 @@ public class VaultRegistryMoveFeature implements Move {
     }
 
     @Override
-    public void preflight(final Path source, final Path target) throws BackgroundException {
-        try {
-            if(registry.find(session, source, false).equals(registry.find(session, target, false))) {
-                registry.find(session, source, false).getFeature(session, Move.class, proxy).preflight(source, target);
+    public void preflight(final Path source, final Optional<Path> optional) throws BackgroundException {
+        if(optional.isPresent()) {
+            try {
+                final Path target = optional.get();
+                if(registry.find(session, source, false).equals(registry.find(session, target, false))) {
+                    registry.find(session, source, false).getFeature(session, Move.class, proxy).preflight(source, optional);
+                }
+                else {
+                    session.getFeature(Copy.class).preflight(source, optional);
+                }
             }
-            else {
-                session.getFeature(Copy.class).preflight(source, target);
+            catch(VaultUnlockCancelException e) {
+                proxy.preflight(source, optional);
             }
         }
-        catch(VaultUnlockCancelException e) {
-            proxy.preflight(source, target);
+        else {
+            proxy.preflight(source, optional);
         }
     }
 

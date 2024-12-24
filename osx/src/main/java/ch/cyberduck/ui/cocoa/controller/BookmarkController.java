@@ -41,7 +41,6 @@ import ch.cyberduck.core.diagnostics.Reachability;
 import ch.cyberduck.core.diagnostics.ReachabilityDiagnosticsFactory;
 import ch.cyberduck.core.diagnostics.ReachabilityFactory;
 import ch.cyberduck.core.exception.HostParserException;
-import ch.cyberduck.core.exception.LocalAccessDeniedException;
 import ch.cyberduck.core.local.BrowserLauncherFactory;
 import ch.cyberduck.core.preferences.Preferences;
 import ch.cyberduck.core.preferences.PreferencesFactory;
@@ -86,7 +85,7 @@ public class BookmarkController extends SheetController implements CollectionLis
     protected final LoginInputValidator validator;
     protected final LoginOptions options;
 
-    private final HostPasswordStore keychain
+    protected final HostPasswordStore keychain
             = PasswordStoreFactory.get();
 
     @Outlet
@@ -194,34 +193,19 @@ public class BookmarkController extends SheetController implements CollectionLis
             controller.setSelectedPanel(PreferencesController.PreferencesToolbarItem.profiles.name());
         }
         else {
-            final Protocol selected = ProtocolFactory.get().forName(sender.selectedItem().representedObject());
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Protocol selection changed to %s", selected));
-            }
-            bookmark.setPort(selected.getDefaultPort());
-            if(!bookmark.getProtocol().isHostnameConfigurable()) {
-                // Previously selected protocol had a default hostname. Change to default
-                // of newly selected protocol.
-                bookmark.setHostname(selected.getDefaultHostname());
-            }
-            if(!selected.isHostnameConfigurable()) {
-                // Hostname of newly selected protocol is not configurable. Change to default.
-                bookmark.setHostname(selected.getDefaultHostname());
-            }
-            if(StringUtils.isNotBlank(selected.getDefaultHostname())) {
+            final Protocol selected = protocols.forName(sender.selectedItem().representedObject());
+            final String hostname = HostnameConfiguratorFactory.get(selected).getHostname(selected.getDefaultHostname());
+            if(StringUtils.isNotBlank(hostname)) {
                 // Prefill with default hostname
-                bookmark.setHostname(selected.getDefaultHostname());
+                bookmark.setHostname(hostname);
             }
-            if(Objects.equals(bookmark.getDefaultPath(), bookmark.getProtocol().getDefaultPath()) ||
-                    !selected.isPathConfigurable()) {
+            if(Objects.equals(bookmark.getDefaultPath(), bookmark.getProtocol().getDefaultPath()) || !selected.isPathConfigurable()) {
                 bookmark.setDefaultPath(selected.getDefaultPath());
             }
+            log.debug("Protocol selection changed to {}", selected);
             bookmark.setProtocol(selected);
-            final int port = HostnameConfiguratorFactory.get(selected).getPort(bookmark.getHostname());
-            if(port != -1) {
-                // External configuration found
-                bookmark.setPort(port);
-            }
+            bookmark.setPort(HostnameConfiguratorFactory.get(selected).getPort(bookmark.getHostname()));
+            bookmark.setCredentials(CredentialsConfiguratorFactory.get(selected).configure(bookmark));
             options.configure(selected);
             validator.configure(selected);
         }
@@ -250,8 +234,10 @@ public class BookmarkController extends SheetController implements CollectionLis
         if(Scheme.isURL(input)) {
             try {
                 final Host parsed = HostParser.parse(input);
+                if(!bookmark.getProtocol().getScheme().equals(parsed.getProtocol().getScheme())) {
+                    bookmark.setProtocol(parsed.getProtocol());
+                }
                 bookmark.setHostname(parsed.getHostname());
-                bookmark.setProtocol(parsed.getProtocol());
                 bookmark.setPort(parsed.getPort());
                 bookmark.setDefaultPath(parsed.getDefaultPath());
             }
@@ -454,18 +440,10 @@ public class BookmarkController extends SheetController implements CollectionLis
                         if(StringUtils.isBlank(bookmark.getCredentials().getUsername())) {
                             return;
                         }
-                        try {
-                            final String password = keychain.getPassword(bookmark.getProtocol().getScheme(),
-                                    bookmark.getPort(),
-                                    bookmark.getHostname(),
-                                    bookmark.getCredentials().getUsername());
-                            if(StringUtils.isNotBlank(password)) {
-                                // Make sure password fetched from keychain and set in field is set in model
-                                bookmark.getCredentials().setPassword(password);
-                            }
-                        }
-                        catch(LocalAccessDeniedException e) {
-                            // Ignore
+                        final String password = keychain.findLoginPassword(bookmark);
+                        if(StringUtils.isNotBlank(password)) {
+                            // Make sure password fetched from keychain and set in field is set in model
+                            bookmark.getCredentials().setPassword(password);
                         }
                     }
                     updateField(passwordField, bookmark.getCredentials().getPassword());

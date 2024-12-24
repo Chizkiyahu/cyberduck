@@ -15,9 +15,7 @@ package ch.cyberduck.core.eue;
  * GNU General Public License for more details.
  */
 
-import ch.cyberduck.core.CaseInsensitivePathPredicate;
 import ch.cyberduck.core.ConnectionCallback;
-import ch.cyberduck.core.DisabledListProgressListener;
 import ch.cyberduck.core.LocaleFactory;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.SimplePathPredicate;
@@ -45,6 +43,7 @@ import org.apache.logging.log4j.Logger;
 import java.text.MessageFormat;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Optional;
 
 public class EueMoveFeature implements Move {
     private static final Logger log = LogManager.getLogger(EueMoveFeature.class);
@@ -61,15 +60,13 @@ public class EueMoveFeature implements Move {
     public Path move(final Path file, final Path target, final TransferStatus status, final Delete.Callback delete, final ConnectionCallback callback) throws BackgroundException {
         try {
             final EueApiClient client = new EueApiClient(session);
+            final String resourceId = fileid.getFileId(file);
             if(status.isExists()) {
-                if(!new CaseInsensitivePathPredicate(file).test(target)) {
-                    if(log.isWarnEnabled()) {
-                        log.warn(String.format("Trash file %s to be replaced with %s", target, file));
-                    }
+                if(!resourceId.equals(fileid.getFileId(target))) {
+                    log.warn("Trash file {} to be replaced with {}", target, file);
                     new EueTrashFeature(session, fileid).delete(Collections.singletonMap(target, status), callback, delete);
                 }
             }
-            final String resourceId = fileid.getFileId(file);
             if(!new SimplePathPredicate(file.getParent()).test(target.getParent())) {
                 final ResourceMoveResponseEntries resourceMoveResponseEntries;
                 final String parentResourceId = fileid.getFileId(target.getParent());
@@ -98,7 +95,7 @@ public class EueMoveFeature implements Move {
                             case HttpStatus.SC_OK:
                                 break;
                             default:
-                                log.warn(String.format("Failure %s moving file %s", resourceMoveResponseEntries, file));
+                                log.warn("Failure {} moving file {}", resourceMoveResponseEntries, file);
                                 final ResourceCreationResponseEntryEntity entity = resourceMoveResponseEntry.getEntity();
                                 if(null == entity) {
                                     throw new EueExceptionMappingService().map(new ApiException(resourceMoveResponseEntry.getReason(),
@@ -128,7 +125,7 @@ public class EueMoveFeature implements Move {
                             case HttpStatus.SC_CREATED:
                                 break;
                             default:
-                                log.warn(String.format("Failure %s renaming file %s", resourceMoveResponseEntry, file));
+                                log.warn("Failure {} renaming file {}", resourceMoveResponseEntry, file);
                                 throw new EueExceptionMappingService().map(new ApiException(resourceMoveResponseEntry.getReason(),
                                         null, resourceMoveResponseEntry.getStatusCode(), client.getResponseHeaders()));
                         }
@@ -136,7 +133,7 @@ public class EueMoveFeature implements Move {
                 }
             }
             fileid.cache(file, null);
-            return target.withAttributes(new EueAttributesFinderFeature(session, fileid).find(target, new DisabledListProgressListener()));
+            return target;
         }
         catch(ApiException e) {
             throw new EueExceptionMappingService().map("Cannot rename {0}", e, file);
@@ -144,15 +141,18 @@ public class EueMoveFeature implements Move {
     }
 
     @Override
-    public void preflight(final Path source, final Path target) throws BackgroundException {
+    public void preflight(final Path source, final Optional<Path> optional) throws BackgroundException {
         if(StringUtils.equals(EueResourceIdProvider.TRASH, source.attributes().getFileId())) {
             throw new InvalidFilenameException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
         }
         if(StringUtils.equals(session.getHost().getProperty("cryptomator.vault.name.default"), source.getName())) {
             throw new InvalidFilenameException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
         }
-        if(!EueTouchFeature.validate(target.getName())) {
-            throw new InvalidFilenameException(MessageFormat.format(LocaleFactory.localizedString("Cannot create {0}", "Error"), target.getName()));
+        if(optional.isPresent()) {
+            final Path target = optional.get();
+            if(!EueTouchFeature.validate(target.getName())) {
+                throw new InvalidFilenameException(MessageFormat.format(LocaleFactory.localizedString("Cannot create {0}", "Error"), target.getName())).withFile(source);
+            }
         }
     }
 

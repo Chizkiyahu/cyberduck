@@ -38,13 +38,11 @@ import ch.cyberduck.core.sds.io.swagger.client.model.UploadShare;
 import ch.cyberduck.core.sds.io.swagger.client.model.UserKeyPairContainer;
 import ch.cyberduck.core.sds.triplecrypt.TripleCryptConverter;
 import ch.cyberduck.core.sds.triplecrypt.TripleCryptExceptionMappingService;
-import ch.cyberduck.core.sds.triplecrypt.TripleCryptKeyPair;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.net.URI;
 import java.text.MessageFormat;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -75,7 +73,7 @@ public class SDSShareFeature implements Share<CreateDownloadShareRequest, Create
             case download: {
                 if(file.isDirectory()) {
                     if(SDSAttributesAdapter.isEncrypted(file.attributes())) {
-                        log.warn(String.format("Not supported for file %s in encrypted room", file));
+                        log.warn("Not supported for file {} in encrypted room", file);
                         // In encrypted rooms only files can be shared
                         return false;
                     }
@@ -83,20 +81,20 @@ public class SDSShareFeature implements Share<CreateDownloadShareRequest, Create
                 final Acl.Role role = SDSPermissionsFeature.DOWNLOAD_SHARE_ROLE;
                 final boolean found = new SDSPermissionsFeature(session, nodeid).containsRole(file, role);
                 if(!found) {
-                    log.warn(String.format("Not supported for file %s with missing role %s", file, role));
+                    log.warn("Not supported for file {} with missing role {}", file, role);
                 }
                 return found;
             }
             case upload: {
                 // An upload account can be created for directories and rooms only
                 if(!file.isDirectory()) {
-                    log.warn(String.format("Not supported for file %s", file));
+                    log.warn("Not supported for file {}", file);
                     return false;
                 }
                 final Acl.Role role = SDSPermissionsFeature.UPLOAD_SHARE_ROLE;
                 final boolean found = new SDSPermissionsFeature(session, nodeid).containsRole(file, role);
                 if(!found) {
-                    log.warn(String.format("Not supported for file %s with missing role %s", file, role));
+                    log.warn("Not supported for file {} with missing role {}", file, role);
                 }
                 return found;
             }
@@ -107,12 +105,10 @@ public class SDSShareFeature implements Share<CreateDownloadShareRequest, Create
     @Override
     public DescriptiveUrl toDownloadUrl(final Path file, final Sharee sharee, CreateDownloadShareRequest options, final PasswordCallback callback) throws BackgroundException {
         try {
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Create download share for %s", file));
-            }
+            log.debug("Create download share for {}", file);
             if(null == options) {
                 options = new CreateDownloadShareRequest();
-                log.warn(String.format("Use default share options %s", options));
+                log.warn("Use default share options {}", options);
             }
             final Long fileid = Long.parseLong(nodeid.getVersionId(file));
             final Host bookmark = session.getHost();
@@ -122,19 +118,19 @@ public class SDSShareFeature implements Share<CreateDownloadShareRequest, Create
                 final EncryptedFileKey encFileKey = TripleCryptConverter.toCryptoEncryptedFileKey(key);
                 final UserKeyPairContainer keyPairContainer = session.getKeyPairForFileKey(encFileKey.getVersion());
                 final UserKeyPair userKeyPair = TripleCryptConverter.toCryptoUserKeyPair(keyPairContainer);
-                final Credentials passphrase = new TripleCryptKeyPair().unlock(callback, bookmark, userKeyPair);
+                final Credentials passphrase = session.unlockTripleCryptKeyPair(callback, userKeyPair);
 
-                final PlainFileKey plainFileKey = Crypto.decryptFileKey(encFileKey, userKeyPair.getUserPrivateKey(), passphrase.getPassword());
+                final PlainFileKey plainFileKey = Crypto.decryptFileKey(encFileKey, userKeyPair.getUserPrivateKey(), passphrase.getPassword().toCharArray());
                 // encrypt file key with a new key pair
                 final UserKeyPair pair;
                 if(null == options.getPassword()) {
                     pair = Crypto.generateUserKeyPair(session.requiredKeyPairVersion(), callback.prompt(
                             bookmark, LocaleFactory.localizedString("Passphrase", "Cryptomator"),
                             LocaleFactory.localizedString("Provide additional login credentials", "Credentials"), new LoginOptions().icon(session.getHost().getProtocol().disk())
-                    ).getPassword());
+                    ).getPassword().toCharArray());
                 }
                 else {
-                    pair = Crypto.generateUserKeyPair(session.requiredKeyPairVersion(), options.getPassword());
+                    pair = Crypto.generateUserKeyPair(session.requiredKeyPairVersion(), options.getPassword().toCharArray());
                 }
                 final EncryptedFileKey encryptedFileKey = Crypto.encryptFileKey(plainFileKey, pair.getUserPublicKey());
                 options.setPassword(null);
@@ -156,17 +152,17 @@ public class SDSShareFeature implements Share<CreateDownloadShareRequest, Create
             final Matcher matcher = Pattern.compile(SDSSession.VERSION_REGEX).matcher(session.softwareVersion().getRestApiVersion());
             if(matcher.matches()) {
                 if(new Version(matcher.group(1)).compareTo(new Version("4.26")) < 0) {
-                    return new DescriptiveUrl(URI.create(String.format("%s://%s/#/public/shares-downloads/%s",
+                    return new DescriptiveUrl(String.format("%s://%s/#/public/shares-downloads/%s",
                             bookmark.getProtocol().getScheme(),
                             bookmark.getHostname(),
-                            share.getAccessKey())),
+                            share.getAccessKey()),
                             DescriptiveUrl.Type.signed, help);
                 }
             }
-            return new DescriptiveUrl(URI.create(String.format("%s://%s/public/download-shares/%s",
+            return new DescriptiveUrl(String.format("%s://%s/public/download-shares/%s",
                     bookmark.getProtocol().getScheme(),
                     bookmark.getHostname(),
-                    share.getAccessKey())),
+                    share.getAccessKey()),
                     DescriptiveUrl.Type.signed, help);
         }
         catch(ApiException e) {
@@ -180,12 +176,10 @@ public class SDSShareFeature implements Share<CreateDownloadShareRequest, Create
     @Override
     public DescriptiveUrl toUploadUrl(final Path file, final Sharee sharee, CreateUploadShareRequest options, final PasswordCallback callback) throws BackgroundException {
         try {
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Create upload share for %s", file));
-            }
+            log.debug("Create upload share for {}", file);
             if(null == options) {
                 options = new CreateUploadShareRequest();
-                log.warn(String.format("Use default share options %s", options));
+                log.warn("Use default share options {}", options);
             }
             final Host bookmark = session.getHost();
             final UploadShare share = new SharesApi(session.getClient()).createUploadShare(
@@ -203,17 +197,17 @@ public class SDSShareFeature implements Share<CreateDownloadShareRequest, Create
             final Matcher matcher = Pattern.compile(SDSSession.VERSION_REGEX).matcher(session.softwareVersion().getRestApiVersion());
             if(matcher.matches()) {
                 if(new Version(matcher.group(1)).compareTo(new Version("4.26")) < 0) {
-                    return new DescriptiveUrl(URI.create(String.format("%s://%s/#/public/shares-uploads/%s",
+                    return new DescriptiveUrl(String.format("%s://%s/#/public/shares-uploads/%s",
                             bookmark.getProtocol().getScheme(),
                             bookmark.getHostname(),
-                            share.getAccessKey())),
+                            share.getAccessKey()),
                             DescriptiveUrl.Type.signed, help);
                 }
             }
-            return new DescriptiveUrl(URI.create(String.format("%s://%s/public/upload-shares/%s",
+            return new DescriptiveUrl(String.format("%s://%s/public/upload-shares/%s",
                     bookmark.getProtocol().getScheme(),
                     bookmark.getHostname(),
-                    share.getAccessKey())),
+                    share.getAccessKey()),
                     DescriptiveUrl.Type.signed, help);
         }
         catch(ApiException e) {

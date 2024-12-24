@@ -66,9 +66,8 @@ public class S3MultipartWriteFeature implements MultipartWrite<StorageObject> {
             final Path bucket = containerService.getContainer(file);
             multipart = session.getClient().multipartStartUpload(
                     bucket.isRoot() ? StringUtils.EMPTY : bucket.getName(), object);
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Multipart upload started for %s with ID %s", multipart.getObjectKey(), multipart.getUploadId()));
-            }
+            log.debug("Multipart upload started for {} with ID {}", multipart.getObjectKey(), multipart.getUploadId());
+            multipart.setBucketName(bucket.isRoot() ? StringUtils.EMPTY : bucket.getName());
         }
         catch(ServiceException e) {
             throw new S3ExceptionMappingService().map("Upload {0} failed", e, file);
@@ -76,13 +75,11 @@ public class S3MultipartWriteFeature implements MultipartWrite<StorageObject> {
         final MultipartOutputStream proxy = new MultipartOutputStream(multipart, file, status);
         return new HttpResponseOutputStream<StorageObject>(new MemorySegementingOutputStream(proxy,
                 new HostPreferences(session.getHost()).getInteger("s3.upload.multipart.size")),
-                new S3AttributesAdapter(), status) {
+                new S3AttributesAdapter(session.getHost()), status) {
             @Override
             public StorageObject getStatus() {
                 if(proxy.getResponse() != null) {
-                    if(log.isDebugEnabled()) {
-                        log.debug(String.format("Received response %s", proxy.getResponse()));
-                    }
+                    log.debug("Received response {}", proxy.getResponse());
                     object.setContentLength(proxy.getOffset());
                     object.setETag(proxy.getResponse().getEtag());
                     if(proxy.getResponse().getVersionId() != null) {
@@ -92,11 +89,6 @@ public class S3MultipartWriteFeature implements MultipartWrite<StorageObject> {
                 return object;
             }
         };
-    }
-
-    @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        return new Append(false).withStatus(status);
     }
 
     @Override
@@ -163,9 +155,7 @@ public class S3MultipartWriteFeature implements MultipartWrite<StorageObject> {
                             canceled.set(e);
                             throw new S3ExceptionMappingService().map("Upload {0} failed", e, file);
                         }
-                        if(log.isDebugEnabled()) {
-                            log.debug(String.format("Saved object %s with checksum %s", file, part.getETag()));
-                        }
+                        log.debug("Saved object {} with checksum {}", file, part.getETag());
                         return new MultipartPart(partNumber,
                                 null == part.getLastModifiedDate() ? new Date(System.currentTimeMillis()) : part.getLastModifiedDate(),
                                 null == part.getETag() ? StringUtils.EMPTY : part.getETag(),
@@ -192,23 +182,20 @@ public class S3MultipartWriteFeature implements MultipartWrite<StorageObject> {
         public void close() throws IOException {
             try {
                 if(close.get()) {
-                    log.warn(String.format("Skip double close of stream %s", this));
+                    log.warn("Skip double close of stream {}", this);
                     return;
                 }
                 if(null != canceled.get()) {
-                    log.warn(String.format("Skip closing with previous failure %s", canceled.get()));
+                    log.warn("Skip closing with previous failure {}", canceled.get().getMessage());
                     return;
                 }
                 if(completed.isEmpty()) {
                     this.write(new byte[0]);
                 }
                 final MultipartCompleted complete = session.getClient().multipartCompleteUpload(multipart, completed);
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Completed multipart upload for %s with checksum %s",
-                            complete.getObjectKey(), complete.getEtag()));
-                }
+                log.debug("Completed multipart upload for {} with checksum {}", complete.getObjectKey(), complete.getEtag());
                 if(file.getType().contains(Path.Type.encrypted)) {
-                    log.warn(String.format("Skip checksum verification for %s with client side encryption enabled", file));
+                    log.warn("Skip checksum verification for {} with client side encryption enabled", file);
                 }
                 else {
                     if(S3Session.isAwsHostname(session.getHost().getHostname())) {

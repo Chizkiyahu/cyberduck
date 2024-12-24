@@ -18,14 +18,17 @@ package ch.cyberduck.core.nextcloud;
 import ch.cyberduck.core.ListProgressListener;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathAttributes;
+import ch.cyberduck.core.URIEncoder;
 import ch.cyberduck.core.dav.DAVAttributesFinderFeature;
-import ch.cyberduck.core.dav.DAVPathEncoder;
 import ch.cyberduck.core.dav.DAVSession;
 import ch.cyberduck.core.dav.DAVTimestampFeature;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.io.Checksum;
+import ch.cyberduck.core.io.HashAlgorithm;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import javax.xml.namespace.QName;
 import java.io.IOException;
@@ -37,6 +40,7 @@ import java.util.stream.Stream;
 import com.github.sardine.DavResource;
 
 public class NextcloudAttributesFinderFeature extends DAVAttributesFinderFeature {
+    private static final Logger log = LogManager.getLogger(NextcloudAttributesFinderFeature.class);
 
     public static final String CUSTOM_NAMESPACE_PREFIX = "oc";
     public static final String CUSTOM_NAMESPACE_URI = "http://owncloud.org/ns";
@@ -88,17 +92,17 @@ public class NextcloudAttributesFinderFeature extends DAVAttributesFinderFeature
     }
 
     @Override
-    protected List<DavResource> list(final Path file) throws IOException {
-        final String url;
+    protected List<DavResource> list(final Path file) throws IOException, BackgroundException {
+        final String path;
         if(StringUtils.isNotBlank(file.attributes().getVersionId())) {
-            url = String.format("%sversions/%s/%s",
-                    new DAVPathEncoder().encode(new NextcloudHomeFeature(session.getHost()).find(NextcloudHomeFeature.Context.versions)),
+            path = String.format("%s/versions/%s/%s",
+                    new NextcloudHomeFeature(session.getHost()).find(NextcloudHomeFeature.Context.versions).getAbsolute(),
                     file.attributes().getFileId(), file.attributes().getVersionId());
         }
         else {
-            url = new DAVPathEncoder().encode(file);
+            path = file.getAbsolute();
         }
-        return session.getClient().list(url, 0,
+        return session.getClient().list(URIEncoder.encode(path), 0,
                 Stream.of(OC_FILEID_CUSTOM_NAMESPACE, OC_CHECKSUMS_CUSTOM_NAMESPACE, OC_SIZE_CUSTOM_NAMESPACE,
                         DAVTimestampFeature.LAST_MODIFIED_CUSTOM_NAMESPACE,
                         DAVTimestampFeature.LAST_MODIFIED_SERVER_CUSTOM_NAMESPACE).collect(Collectors.toSet()));
@@ -121,10 +125,12 @@ public class NextcloudAttributesFinderFeature extends DAVAttributesFinderFeature
             }
             if(properties.containsKey(OC_CHECKSUMS_CUSTOM_NAMESPACE)) {
                 for(String v : StringUtils.split(properties.get(OC_CHECKSUMS_CUSTOM_NAMESPACE), StringUtils.SPACE)) {
-                    final String hash = StringUtils.lowerCase(StringUtils.split(v, ":")[1]);
-                    final Checksum checksum = Checksum.parse(StringUtils.lowerCase(StringUtils.split(v, ":")[1]));
-                    if(Checksum.NONE != checksum) {
-                        attributes.setChecksum(checksum);
+                    try {
+                        attributes.setChecksum(new Checksum(HashAlgorithm.valueOf(StringUtils.lowerCase(StringUtils.split(v, ":")[0])),
+                                StringUtils.lowerCase(StringUtils.split(v, ":")[1])));
+                    }
+                    catch(IllegalArgumentException e) {
+                        log.warn("Unsupported checksum {}", v);
                     }
                 }
             }

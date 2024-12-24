@@ -3,7 +3,8 @@
 [![GitHub commit](https://img.shields.io/github/last-commit/iterate-ch/cyberduck)](https://github.com/iterate-ch/cyberduck/commits/master)
 [![GitHub license](https://img.shields.io/badge/license-GPL-blue.svg)](https://raw.githubusercontent.com/iterate-ch/cyberduck/master/LICENSE)
 [![Build Status](https://github.com/iterate-ch/cyberduck/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/iterate-ch/cyberduck/actions)
-[![Twitter](https://img.shields.io/badge/twitter-@cyberduckapp-blue.svg?style=flat)](http://twitter.com/cyberduckapp)
+[![Mastodon](https://img.shields.io/mastodon/follow/109698908353278292?domain=https%3A%2F%2Ffosstodon.org%2F&style=flat)](https://fosstodon.org/@cyberduck)
+[![Gurubase](https://img.shields.io/badge/Gurubase-Ask%20Cyberduck%20Guru-006BFF)](https://gurubase.io/g/cyberduck)
 
 This is the development home for Cyberduck, a libre file transfer client for macOS and Windows. Command line interface (CLI) for Linux, macOS and Windows. The core libraries are used in [Mountain Duck](https://mountainduck.io/).
 
@@ -130,6 +131,10 @@ Run with `-Pinstaller` to build installer packages with build artifacts
 * `cli/windows/target/release/*.(exe|msi)`
 * `cli/linux/target/release/*.(deb|rpm)`
 
+### macOS
+
+Active the sandboxing profile with `-Psandbox` to apply sandbox entitlements `com.apple.security.app-sandbox`.
+
 ### Windows
 
 You will run into warnings from `MSBuild`/`WiX` that are unrelated to how Cyberduck is built. You may safely ignore them.
@@ -138,9 +143,7 @@ You will run into warnings from `MSBuild`/`WiX` that are unrelated to how Cyberd
 
 ### macOS
 
-Edit `setup/app/Info.plist` if you want to debug _Cyberduck.app_ or `setup/pkg/Info.plist` if you want to
-debug`duck` respectively. Add `-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005` in `VMOptions` to
-allow to connect to the running application in your IDE by attaching to the remote JVM.
+Build with `-Pdebug` to allow attaching the remote debugger on port `5005`.
 
 ### Windows
 

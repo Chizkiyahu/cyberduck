@@ -130,9 +130,7 @@ public class CopyTransfer extends Transfer {
     @Override
     public TransferAction action(final Session<?> source, final Session<?> destination, boolean resumeRequested, boolean reloadRequested,
                                  final TransferPrompt prompt, final ListProgressListener listener) throws BackgroundException {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Find transfer action with prompt %s", prompt));
-        }
+        log.debug("Find transfer action with prompt {}", prompt);
         if(resumeRequested) {
             return TransferAction.comparison;
         }
@@ -171,25 +169,21 @@ public class CopyTransfer extends Transfer {
 
     @Override
     public TransferPathFilter filter(final Session<?> source, final Session<?> destination, final TransferAction action, final ProgressListener listener) {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Filter transfer with action %s", action));
-        }
+        log.debug("Filter transfer with action {}", action);
         final Find find = new CachingFindFeature(destination, cache,
                 destination.getFeature(Find.class, new DefaultFindFeature(destination)));
         final AttributesFinder attributes = new CachingAttributesFinderFeature(destination, cache,
                 destination.getFeature(AttributesFinder.class, new DefaultAttributesFinderFeature(destination)));
         if(action.equals(TransferAction.comparison)) {
-            return new ChecksumFilter(source, destination, mapping).withFinder(find).withAttributes(attributes);
+            return new ChecksumFilter(source, destination, mapping, find, attributes);
         }
-        return new OverwriteFilter(source, destination, mapping).withFinder(find).withAttributes(attributes);
+        return new OverwriteFilter(source, destination, mapping, find, attributes);
     }
 
     @Override
     public List<TransferItem> list(final Session<?> session, final Path directory, final Local local,
                                    final ListProgressListener listener) throws BackgroundException {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("List children for %s", directory));
-        }
+        log.debug("List children for {}", directory);
         final AttributedList<Path> list = session.getFeature(ListService.class).list(directory, listener).filter(comparator, filter);
         final Path copy = mapping.get(directory);
         for(Path f : list) {
@@ -204,13 +198,6 @@ public class CopyTransfer extends Transfer {
 
     @Override
     public void pre(final Session<?> source, final Session<?> destination, final Map<TransferItem, TransferStatus> files, final TransferPathFilter filter, final TransferErrorCallback error, final ProgressListener listener, final ConnectionCallback callback) throws BackgroundException {
-        final Bulk<?> download = source.getFeature(Bulk.class);
-        {
-            final Object id = download.pre(Type.download, files, callback);
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Obtained bulk id %s for transfer %s", id, this));
-            }
-        }
         final Bulk<?> upload = destination.getFeature(Bulk.class);
         {
             final Map<TransferItem, TransferStatus> targets = new HashMap<>();
@@ -218,18 +205,17 @@ public class CopyTransfer extends Transfer {
                 targets.put(new TransferItem(mapping.get(entry.getKey().remote)), entry.getValue());
             }
             final Object id = upload.pre(Type.upload, targets, callback);
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Obtained bulk id %s for transfer %s", id, this));
-            }
+            log.debug("Obtained bulk id {} for transfer {}", id, this);
+        }
+        final Bulk<?> download = source.getFeature(Bulk.class);
+        {
+            final Object id = download.pre(Type.download, files, callback);
+            log.debug("Obtained bulk id {} for transfer {}", id, this);
         }
     }
 
     @Override
     public void post(final Session<?> source, final Session<?> destination, final Map<TransferItem, TransferStatus> files, final TransferErrorCallback error, final ProgressListener listener, final ConnectionCallback callback) throws BackgroundException {
-        final Bulk<?> download = source.getFeature(Bulk.class);
-        {
-            download.post(Type.download, files, callback);
-        }
         final Bulk<?> upload = destination.getFeature(Bulk.class);
         {
             final Map<TransferItem, TransferStatus> targets = new HashMap<>();
@@ -238,17 +224,19 @@ public class CopyTransfer extends Transfer {
             }
             upload.post(Type.upload, targets, callback);
         }
+        final Bulk<?> download = source.getFeature(Bulk.class);
+        {
+            download.post(Type.download, files, callback);
+        }
     }
 
     @Override
     public void transfer(final Session<?> session, final Session<?> destination, final Path source, final Local n,
-                         final TransferOptions options, final TransferStatus overall, final TransferStatus segment,
-                         final ConnectionCallback connectionCallback,
-                         final ProgressListener listener, final StreamListener streamListener) throws BackgroundException {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Transfer file %s with options %s", source, options));
-        }
-        listener.message(MessageFormat.format(LocaleFactory.localizedString("Copying {0} to {1}", "Status"),
+                         final TransferOptions options, final TransferStatus segment,
+                         final ConnectionCallback prompt,
+                         final ProgressListener progress, final StreamListener listener) throws BackgroundException {
+        log.debug("Transfer file {} with options {}", source, options);
+        progress.message(MessageFormat.format(LocaleFactory.localizedString("Copying {0} to {1}", "Status"),
                 source.getName(), mapping.get(source).getName()));
         if(source.isDirectory()) {
             if(!segment.isExists()) {
@@ -260,7 +248,7 @@ public class CopyTransfer extends Transfer {
         else {
             // Transfer
             final Copy feature = new DefaultCopyFeature(session).withTarget(destination);
-            feature.copy(source, mapping.get(source), segment, connectionCallback, streamListener);
+            feature.copy(source, mapping.get(source), segment, prompt, listener);
         }
     }
 

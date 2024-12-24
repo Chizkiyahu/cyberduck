@@ -44,7 +44,7 @@ public abstract class SessionBackgroundAction<T> extends AbstractBackgroundActio
             = new StringBuffer();
 
     private static final String LINE_SEPARATOR
-            = System.getProperty("line.separator");
+            = System.lineSeparator();
 
     private final AlertCallback alert;
     private final ProgressListener progress;
@@ -138,9 +138,7 @@ public abstract class SessionBackgroundAction<T> extends AbstractBackgroundActio
         if(this.isCanceled()) {
             return false;
         }
-        if(log.isInfoEnabled()) {
-            log.info(String.format("Run alert callback %s for failure %s", alert, failure));
-        }
+        log.info("Run alert callback {} for failure {}", alert, failure);
         // Display alert if the action was not canceled intentionally
         return alert.alert(pool.getHost(), failure, new StringBuilder(transcript.toString()));
     }

@@ -18,6 +18,7 @@ package ch.cyberduck.core.ctera;
 import ch.cyberduck.core.AbstractProtocol;
 import ch.cyberduck.core.Credentials;
 import ch.cyberduck.core.LoginOptions;
+import ch.cyberduck.core.Protocol;
 import ch.cyberduck.core.Scheme;
 import ch.cyberduck.core.dav.DAVSSLProtocol;
 import ch.cyberduck.core.preferences.PreferencesFactory;
@@ -25,6 +26,9 @@ import ch.cyberduck.core.synchronization.ComparisonService;
 import ch.cyberduck.core.synchronization.DefaultComparisonService;
 import ch.cyberduck.core.synchronization.ETagComparisonService;
 
+import com.google.auto.service.AutoService;
+
+@AutoService(Protocol.class)
 public class CteraProtocol extends AbstractProtocol {
 
     public static final String CTERA_REDIRECT_URI = String.format("%s:websso",
@@ -72,7 +76,11 @@ public class CteraProtocol extends AbstractProtocol {
 
     @Override
     public boolean validate(final Credentials credentials, final LoginOptions options) {
-        return super.validate(credentials, new LoginOptions(options).token(false).password(false).user(false));
+        if(options.user && options.password && options.token) {
+            // No prompt before login when it is determined if login is via SSO or username
+            return true;
+        }
+        return super.validate(credentials, options);
     }
 
     @Override

@@ -19,10 +19,12 @@ package ch.cyberduck.core.worker;
 
 import ch.cyberduck.core.LocaleFactory;
 import ch.cyberduck.core.Path;
+import ch.cyberduck.core.PathAttributes;
 import ch.cyberduck.core.Session;
 import ch.cyberduck.core.SimplePathPredicate;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.features.AclPermission;
+import ch.cyberduck.core.features.AttributesFinder;
 import ch.cyberduck.core.features.Directory;
 import ch.cyberduck.core.features.Encryption;
 import ch.cyberduck.core.features.UnixPermission;
@@ -50,9 +52,7 @@ public class CreateDirectoryWorker extends Worker<Path> {
     @Override
     public Path run(final Session<?> session) throws BackgroundException {
         final Directory feature = session.getFeature(Directory.class);
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Run with feature %s", feature));
-        }
+        log.debug("Run with feature {}", feature);
         final TransferStatus status = new TransferStatus().withLength(0L);
         final Encryption encryption = session.getFeature(Encryption.class);
         if(encryption != null) {
@@ -66,11 +66,15 @@ public class CreateDirectoryWorker extends Worker<Path> {
             }
             final AclPermission acl = session.getFeature(AclPermission.class);
             if(acl != null) {
-                status.setAcl(acl.getDefault(EnumSet.of(Path.Type.directory)));
+                status.setAcl(acl.getDefault(folder));
             }
         }
         status.setRegion(region);
-        return feature.mkdir(folder, status);
+        final Path result = feature.mkdir(folder, status);
+        if(PathAttributes.EMPTY.equals(result.attributes())) {
+            return result.withAttributes(session.getFeature(AttributesFinder.class).find(result));
+        }
+        return result;
     }
 
     @Override

@@ -31,7 +31,8 @@ import org.junit.experimental.categories.Category;
 import java.util.Collections;
 import java.util.EnumSet;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 
 @Category(IntegrationTest.class)
 public class EueTouchFeatureTest extends AbstractEueSessionTest {
@@ -53,13 +54,12 @@ public class EueTouchFeatureTest extends AbstractEueSessionTest {
         final Path container = new EueDirectoryFeature(session, fileid).mkdir(new Path(
                 new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory, Path.Type.volume)), new TransferStatus());
         final Path file = new EueTouchFeature(session, fileid).touch(new Path(container, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file)), new TransferStatus().withLength(0L));
-        assertEquals(file.attributes(), new EueAttributesFinderFeature(session, fileid).find(file));
         // Create conflict
         assertThrows(ConflictException.class, () -> new EueTouchFeature(session, fileid).touch(file, new TransferStatus().withLength(0L)));
         new EueDeleteFeature(session, fileid).delete(Collections.singletonList(file), new DisabledPasswordCallback(), new Delete.DisabledCallback());
     }
 
-    @Test(expected = ConflictException.class)
+    @Test
     public void testCaseSensitivity() throws Exception {
         final EueResourceIdProvider fileid = new EueResourceIdProvider(session);
         final Path container = new EueDirectoryFeature(session, fileid).mkdir(new Path(
@@ -67,14 +67,9 @@ public class EueTouchFeatureTest extends AbstractEueSessionTest {
         final String filename = StringUtils.lowerCase(new AlphanumericRandomStringService().random());
         final Path file = new EueTouchFeature(session, fileid)
                 .touch(new Path(container, filename, EnumSet.of(Path.Type.file)), new TransferStatus().withLength(0L));
-        try {
-            // Create conflict
-            new EueTouchFeature(session, fileid)
-                    .touch(new Path(container, StringUtils.capitalize(filename), EnumSet.of(Path.Type.file)), new TransferStatus().withLength(0L));
-            fail();
-        }
-        finally {
-            new EueDeleteFeature(session, fileid).delete(Collections.singletonList(file), new DisabledPasswordCallback(), new Delete.DisabledCallback());
-        }
+        // Create conflict
+        assertThrows(ConflictException.class, () -> new EueTouchFeature(session, fileid)
+                .touch(new Path(container, StringUtils.capitalize(filename), EnumSet.of(Path.Type.file)), new TransferStatus().withLength(0L)));
+        new EueDeleteFeature(session, fileid).delete(Collections.singletonList(file), new DisabledPasswordCallback(), new Delete.DisabledCallback());
     }
 }

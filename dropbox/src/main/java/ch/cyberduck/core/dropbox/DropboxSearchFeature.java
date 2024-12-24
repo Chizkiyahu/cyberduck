@@ -49,14 +49,13 @@ public class DropboxSearchFeature implements Search {
     public DropboxSearchFeature(final DropboxSession session) {
         this.session = session;
         this.attributes = new DropboxAttributesFinderFeature(session);
-        this.containerService = new DropboxPathContainerService(session);
+        this.containerService = new DropboxPathContainerService();
     }
 
     @Override
     public AttributedList<Path> search(final Path workdir, final Filter<Path> regex, final ListProgressListener listener) throws BackgroundException {
         try {
             final AttributedList<Path> list = new AttributedList<>();
-            long start = 0;
             SearchV2Result result = new DbxUserFilesRequests(session.getClient(workdir)).searchV2Builder(regex.toString())
                     .withOptions(SearchOptions.newBuilder().withPath(containerService.getKey(workdir)).build()).start();
             this.parse(workdir, listener, list, result);
@@ -85,7 +84,7 @@ public class DropboxSearchFeature implements Search {
                 type = EnumSet.of(Path.Type.directory);
             }
             else {
-                log.warn(String.format("Skip file %s", metadata));
+                log.warn("Skip file {}", metadata);
                 return true;
             }
             list.add(new Path(metadata.getPathDisplay(), type, attributes.toAttributes(metadata)));

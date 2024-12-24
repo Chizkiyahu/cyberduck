@@ -70,21 +70,19 @@ public class SDSDirectS3WriteFeature extends AbstractHttpWriteFeature<Node> {
                             case HttpStatus.SC_OK:
                                 // Upload complete
                                 if(response.containsHeader("ETag")) {
-                                    if(log.isInfoEnabled()) {
-                                        log.info(String.format("Received response %s for part number %d", response, status.getPart()));
-                                    }
+                                    log.info("Received response {} for part number {}", response, status.getPart());
                                     return new Node()
                                             .type(Node.TypeEnum.FILE)
                                             .hash(Checksum.parse(StringUtils.remove(response.getFirstHeader("ETag").getValue(), '"')).hash);
                                 }
                                 else {
-                                    log.error(String.format("Missing ETag in response %s", response));
+                                    log.error("Missing ETag in response {}", response);
                                     throw new InteroperabilityException(response.getStatusLine().getReasonPhrase());
                                 }
                             default:
                                 EntityUtils.updateEntity(response, new BufferedHttpEntity(response.getEntity()));
-                                throw new DefaultHttpResponseExceptionMappingService().map(
-                                    new HttpResponseException(response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase()));
+                                throw new DefaultHttpResponseExceptionMappingService().map("Upload {0} failed",
+                                        new HttpResponseException(response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase()), file);
                         }
                     }
                     finally {
@@ -92,10 +90,10 @@ public class SDSDirectS3WriteFeature extends AbstractHttpWriteFeature<Node> {
                     }
                 }
                 catch(HttpResponseException e) {
-                    throw new DefaultHttpResponseExceptionMappingService().map(e);
+                    throw new DefaultHttpResponseExceptionMappingService().map("Upload {0} failed", e, file);
                 }
                 catch(IOException e) {
-                    throw new DefaultIOExceptionMappingService().map(e);
+                    throw new DefaultIOExceptionMappingService().map("Upload {0} failed", e, file);
                 }
             }
 
@@ -104,11 +102,6 @@ public class SDSDirectS3WriteFeature extends AbstractHttpWriteFeature<Node> {
                 return status.getLength();
             }
         });
-    }
-
-    @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        return new Append(false).withStatus(status);
     }
 
     @Override

@@ -35,6 +35,7 @@ import ch.cyberduck.core.transfer.TransferStatus;
 import ch.cyberduck.core.worker.DefaultExceptionMappingService;
 
 import org.apache.commons.io.input.NullInputStream;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.cryptomator.cryptolib.api.FileHeader;
@@ -82,9 +83,7 @@ public class CryptoChecksumCompute extends AbstractChecksumCompute {
 
     protected Checksum compute(final InputStream in, final StreamCancelation cancel,
                                final long offset, final long length, final ByteBuffer header, final NonceGenerator nonces) throws ChecksumException {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Calculate checksum with header %s", header));
-        }
+        log.debug("Calculate checksum with header {}", header);
         try {
             final PipedOutputStream source = new PipedOutputStream();
             final CryptoOutputStream out = new CryptoOutputStream(source, cryptomator.getFileContentCryptor(),
@@ -110,7 +109,9 @@ public class CryptoChecksumCompute extends AbstractChecksumCompute {
                         Uninterruptibles.getUninterruptibly(execute);
                     }
                     catch(ExecutionException e) {
-                        Throwables.throwIfInstanceOf(Throwables.getRootCause(e), BackgroundException.class);
+                        for(Throwable cause : ExceptionUtils.getThrowableList(e)) {
+                            Throwables.throwIfInstanceOf(cause, BackgroundException.class);
+                        }
                         throw new DefaultExceptionMappingService().map(Throwables.getRootCause(e));
                     }
                 }

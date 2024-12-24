@@ -16,6 +16,8 @@ package ch.cyberduck.core.googledrive;
  */
 
 import ch.cyberduck.core.AlphanumericRandomStringService;
+import ch.cyberduck.core.AttributedList;
+import ch.cyberduck.core.CacheReference;
 import ch.cyberduck.core.DisabledConnectionCallback;
 import ch.cyberduck.core.DisabledListProgressListener;
 import ch.cyberduck.core.DisabledLoginCallback;
@@ -23,7 +25,6 @@ import ch.cyberduck.core.DisabledPasswordCallback;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathAttributes;
 import ch.cyberduck.core.features.Delete;
-import ch.cyberduck.core.features.Write;
 import ch.cyberduck.core.http.HttpResponseOutputStream;
 import ch.cyberduck.core.io.StreamCopier;
 import ch.cyberduck.core.shared.DefaultFindFeature;
@@ -75,9 +76,6 @@ public class DriveWriteFeatureTest extends AbstractDriveTest {
             assertEquals(1620113107725L, attributes.getModificationDate());
             assertEquals(1695160857860L, attributes.getCreationDate());
             assertEquals(content.length, attributes.getSize());
-            final Write.Append append = new DriveWriteFeature(session, idProvider).append(test, status.withRemote(new DriveAttributesFinderFeature(session, idProvider).find(test)));
-            assertFalse(append.append);
-            assertEquals(content.length, append.size, 0L);
             final byte[] buffer = new byte[content.length];
             final InputStream in = new DriveReadFeature(session, idProvider).read(test, new TransferStatus(), new DisabledConnectionCallback());
             IOUtils.readFully(in, buffer);
@@ -103,6 +101,78 @@ public class DriveWriteFeatureTest extends AbstractDriveTest {
             assertEquals(new DriveAttributesFinderFeature(session, idProvider).toAttributes(out.getStatus()), attributes);
         }
         new DriveDeleteFeature(session, idProvider).delete(Arrays.asList(test, folder), new DisabledLoginCallback(), new Delete.DisabledCallback());
+    }
+
+    @Test
+    public void testWriteSameFilename() throws Exception {
+        final DriveFileIdProvider idProvider = new DriveFileIdProvider(session);
+        final Path folder = new DriveDirectoryFeature(session, idProvider).mkdir(
+                new Path(DriveHomeFinderService.MYDRIVE_FOLDER, UUID.randomUUID().toString(), EnumSet.of(Path.Type.directory)), new TransferStatus());
+        final Path test = new Path(folder, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
+        {
+            final byte[] content = RandomUtils.nextBytes(2048);
+            final TransferStatus status = new TransferStatus().withLength(content.length);
+            final HttpResponseOutputStream<File> out = new DriveWriteFeature(session, idProvider).write(test, status, new DisabledConnectionCallback());
+            new StreamCopier(new TransferStatus(), new TransferStatus()).transfer(new ByteArrayInputStream(content), out);
+            final String fileid = out.getStatus().getId();
+            assertNotNull(fileid);
+            assertTrue(new DefaultFindFeature(session).find(test));
+            final PathAttributes attributes = new DriveAttributesFinderFeature(session, idProvider).find(test);
+            assertEquals(fileid, attributes.getFileId());
+            assertEquals(content.length, attributes.getSize());
+        }
+        {
+            // Add file with same name
+            final byte[] content = RandomUtils.nextBytes(1024);
+            final TransferStatus status = new TransferStatus().withLength(content.length);
+            final HttpResponseOutputStream<File> out = new DriveWriteFeature(session, idProvider).write(test, status, new DisabledConnectionCallback());
+            new StreamCopier(new TransferStatus(), new TransferStatus()).transfer(new ByteArrayInputStream(content), out);
+            final String fileid = out.getStatus().getId();
+            final PathAttributes attributes = new DriveAttributesFinderFeature(session, idProvider).find(test);
+            assertEquals(content.length, attributes.getSize());
+            assertEquals(fileid, attributes.getFileId());
+        }
+        final AttributedList<Path> l1 = new DriveListService(session, idProvider).list(folder, new DisabledListProgressListener());
+        {
+            assertEquals(2, l1.size());
+            assertNotEquals(l1.get(0).attributes().getFileId(), l1.get(1).attributes().getFileId());
+            assertTrue(l1.find(new CacheReference<Path>() {
+                @Override
+                public boolean test(final Path f) {
+                    return f.attributes().getSize() == 2048;
+                }
+            }).attributes().isDuplicate());
+            assertTrue(l1.find(new CacheReference<Path>() {
+                @Override
+                public boolean test(final Path f) {
+                    return f.attributes().getSize() == 1024;
+                }
+            }).attributes().isDuplicate());
+        }
+        new DriveTrashFeature(session, idProvider).delete(Collections.singletonList(l1.find(new CacheReference<Path>() {
+            @Override
+            public boolean test(final Path f) {
+                return f.attributes().getSize() == 2048;
+            }
+        })), new DisabledPasswordCallback(), new Delete.DisabledCallback());
+        final AttributedList<Path> l2 = new DriveListService(session, idProvider).list(folder, new DisabledListProgressListener());
+        {
+            assertEquals(2, l2.size());
+            assertNotEquals(l2.get(0).attributes().getFileId(), l2.get(1).attributes().getFileId());
+            assertTrue(l2.find(new CacheReference<Path>() {
+                @Override
+                public boolean test(final Path f) {
+                    return f.attributes().getSize() == 2048;
+                }
+            }).attributes().isHidden());
+            assertFalse(l2.find(new CacheReference<Path>() {
+                @Override
+                public boolean test(final Path f) {
+                    return f.attributes().getSize() == 1024;
+                }
+            }).attributes().isDuplicate());
+        }
+        new DriveDeleteFeature(session, idProvider).delete(Collections.singletonList(folder), new DisabledLoginCallback(), new Delete.DisabledCallback());
     }
 
     @Test

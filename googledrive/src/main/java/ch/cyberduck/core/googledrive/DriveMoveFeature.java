@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Optional;
 
 import com.google.api.services.drive.model.File;
 
@@ -54,9 +55,7 @@ public class DriveMoveFeature implements Move {
     public Path move(final Path file, final Path renamed, final TransferStatus status, final Delete.Callback callback, final ConnectionCallback connectionCallback) throws BackgroundException {
         try {
             if(status.isExists()) {
-                if(log.isWarnEnabled()) {
-                    log.warn(String.format("Trash file %s to be replaced with %s", renamed, file));
-                }
+                log.warn("Trash file {} to be replaced with {}", renamed, file);
                 delete.delete(Collections.singletonMap(renamed, status), connectionCallback, callback);
             }
             final String id = fileid.getFileId(file);
@@ -83,11 +82,11 @@ public class DriveMoveFeature implements Move {
                 }
                 // Move the file to the new folder
                 result = session.getClient().files().update(id, null)
-                    .setAddParents(fileid.getFileId(renamed.getParent()))
-                    .setRemoveParents(previousParents.toString())
-                    .setFields(DriveAttributesFinderFeature.DEFAULT_FIELDS)
-                    .setSupportsAllDrives(new HostPreferences(session.getHost()).getBoolean("googledrive.teamdrive.enable"))
-                    .execute();
+                        .setAddParents(fileid.getFileId(renamed.getParent()))
+                        .setRemoveParents(previousParents.toString())
+                        .setFields(DriveAttributesFinderFeature.DEFAULT_FIELDS)
+                        .setSupportsAllDrives(new HostPreferences(session.getHost()).getBoolean("googledrive.teamdrive.enable"))
+                        .execute();
             }
             fileid.cache(file, null);
             fileid.cache(renamed, id);
@@ -104,9 +103,12 @@ public class DriveMoveFeature implements Move {
     }
 
     @Override
-    public void preflight(final Path source, final Path target) throws BackgroundException {
-        if(target.getParent().isRoot()) {
-            throw new UnsupportedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(target);
+    public void preflight(final Path source, final Optional<Path> optional) throws BackgroundException {
+        if(optional.isPresent()) {
+            final Path target = optional.get();
+            if(target.getParent().isRoot()) {
+                throw new UnsupportedException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
+            }
         }
         if(source.isPlaceholder()) {
             // Disable for application/vnd.google-apps

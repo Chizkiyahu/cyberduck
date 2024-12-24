@@ -21,6 +21,7 @@ import ch.cyberduck.core.PathContainerService;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.features.Bulk;
 import ch.cyberduck.core.features.Delete;
+import ch.cyberduck.core.features.Scheduler;
 import ch.cyberduck.core.preferences.HostPreferences;
 import ch.cyberduck.core.transfer.Transfer;
 import ch.cyberduck.core.transfer.TransferItem;
@@ -57,9 +58,7 @@ public class SDSEncryptionBulkFeature implements Bulk<Void> {
                     final Path container = containerService.getContainer(entry.getKey().remote);
                     if(rooms.get(container)) {
                         final TransferStatus status = entry.getValue();
-                        if(log.isDebugEnabled()) {
-                            log.debug(String.format("Set file key for %s", entry.getKey()));
-                        }
+                        log.debug("Set file key for {}", entry.getKey());
                         status.setFilekey(SDSTripleCryptEncryptorFeature.generateFileKey());
                     }
                 }
@@ -79,9 +78,7 @@ public class SDSEncryptionBulkFeature implements Bulk<Void> {
             if(rooms.containsKey(container)) {
                 continue;
             }
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Determine encryption status for %s", container));
-            }
+            log.debug("Determine encryption status for {}", container);
             rooms.put(container, triplecrypt.isEncrypted(container));
         }
         return rooms;
@@ -95,17 +92,15 @@ public class SDSEncryptionBulkFeature implements Bulk<Void> {
             default:
                 if(new HostPreferences(session.getHost()).getBoolean("sds.encryption.missingkeys.upload")) {
                     if(session.userAccount().isEncryptionEnabled()) {
-                        final SDSMissingFileKeysSchedulerFeature background = new SDSMissingFileKeysSchedulerFeature();
+                        final Scheduler scheduler = session.getFeature(Scheduler.class);
                         final Map<Path, Boolean> rooms = this.getRoomEncryptionStatus(files);
                         for(Map.Entry<TransferItem, TransferStatus> entry : files.entrySet()) {
                             final Path file = entry.getKey().remote;
                             if(file.isFile()) {
                                 final Path container = containerService.getContainer(file);
                                 if(rooms.get(container)) {
-                                    if(log.isDebugEnabled()) {
-                                        log.debug(String.format("Run missing file keys for %s", file));
-                                    }
-                                    background.operate(session, callback, file);
+                                    log.debug("Run missing file keys for {}", file);
+                                    scheduler.execute(callback);
                                 }
                             }
                         }

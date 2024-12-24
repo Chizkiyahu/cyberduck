@@ -1,20 +1,20 @@
 package ch.cyberduck.core.nextcloud;
 
 import ch.cyberduck.core.AlphanumericRandomStringService;
-import ch.cyberduck.core.DefaultPathPredicate;
 import ch.cyberduck.core.DisabledConnectionCallback;
 import ch.cyberduck.core.DisabledListProgressListener;
 import ch.cyberduck.core.DisabledLoginCallback;
 import ch.cyberduck.core.DisabledPasswordCallback;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathAttributes;
+import ch.cyberduck.core.SimplePathPredicate;
 import ch.cyberduck.core.date.RFC1123DateFormatter;
 import ch.cyberduck.core.dav.DAVDeleteFeature;
 import ch.cyberduck.core.dav.DAVDirectoryFeature;
 import ch.cyberduck.core.dav.DAVLockFeature;
 import ch.cyberduck.core.dav.DAVTimestampFeature;
 import ch.cyberduck.core.dav.DAVTouchFeature;
-import ch.cyberduck.core.exception.InteroperabilityException;
+import ch.cyberduck.core.exception.LockedException;
 import ch.cyberduck.core.exception.NotfoundException;
 import ch.cyberduck.core.features.Delete;
 import ch.cyberduck.core.http.HttpResponseOutputStream;
@@ -67,12 +67,11 @@ public class NextcloudAttributesFinderFeatureTest extends AbstractNextcloudTest 
     @Test
     public void testFindFile() throws Exception {
         final Checksum checksum = ChecksumComputeFactory.get(HashAlgorithm.sha1).compute(new NullInputStream(0L), new TransferStatus());
-        final Path test = new DAVTouchFeature(new NextcloudWriteFeature(session), new NextcloudAttributesFinderFeature(session)).touch(new Path(new DefaultHomeFinderService(session).find(),
+        final Path test = new DAVTouchFeature(new NextcloudWriteFeature(session)).touch(new Path(new DefaultHomeFinderService(session).find(),
                 new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file)), new TransferStatus().withChecksum(checksum));
-        assertNotNull(test.attributes().getFileId());
         final NextcloudAttributesFinderFeature f = new NextcloudAttributesFinderFeature(session);
         final PathAttributes attributes = f.find(test);
-        assertEquals(test.attributes().getFileId(), attributes.getFileId());
+        assertNotNull(attributes.getFileId());
         assertEquals(0L, attributes.getSize());
         assertNotEquals(-1L, attributes.getModificationDate());
         assertNotEquals(Checksum.NONE, attributes.getChecksum());
@@ -97,10 +96,9 @@ public class NextcloudAttributesFinderFeatureTest extends AbstractNextcloudTest 
         final Path home = new DefaultHomeFinderService(session).find();
         final Path directory = new DAVDirectoryFeature(session, new NextcloudAttributesFinderFeature(session)).mkdir(
                 new Path(home, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory)), new TransferStatus());
-        assertNotNull(directory.attributes().getFileId());
         final NextcloudAttributesFinderFeature f = new NextcloudAttributesFinderFeature(session);
         final PathAttributes attributes = f.find(directory);
-        assertEquals(directory.attributes().getFileId(), attributes.getFileId());
+        assertNotNull(attributes.getFileId());
         assertEquals(0L, attributes.getSize());
         assertNotEquals(-1L, attributes.getModificationDate());
         assertNotNull(attributes.getETag());
@@ -123,7 +121,7 @@ public class NextcloudAttributesFinderFeatureTest extends AbstractNextcloudTest 
         }
         assertEquals(3L, new NextcloudAttributesFinderFeature(session).find(directory).getSize());
         assertEquals(3L, new NextcloudListService(session).list(home, new DisabledListProgressListener())
-                .find(new DefaultPathPredicate(directory)).attributes().getSize());
+                .find(new SimplePathPredicate(directory)).attributes().getSize());
         new DAVDeleteFeature(session).delete(Arrays.asList(file, directory), new DisabledPasswordCallback(), new Delete.DisabledCallback());
     }
 
@@ -189,14 +187,15 @@ public class NextcloudAttributesFinderFeatureTest extends AbstractNextcloudTest 
         assertEquals(modified.getTime(), attrs.getModificationDate());
     }
 
-    @Test(expected = InteroperabilityException.class)
+    @Test
     public void testFindLock() throws Exception {
-        final Path test = new DAVTouchFeature(new NextcloudWriteFeature(session), new NextcloudAttributesFinderFeature(session)).touch(new Path(new DefaultHomeFinderService(session).find(),
+        final Path test = new DAVTouchFeature(new NextcloudWriteFeature(session)).touch(new Path(new DefaultHomeFinderService(session).find(),
                 new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file)), new TransferStatus());
         final NextcloudAttributesFinderFeature f = new NextcloudAttributesFinderFeature(session);
         assertNull(f.find(test).getLockId());
         final String lockId = new DAVLockFeature(session).lock(test);
         assertNotNull(f.find(test).getLockId());
+        assertThrows(LockedException.class, () -> new DAVDeleteFeature(session).delete(Collections.singletonList(test), new DisabledPasswordCallback(), new Delete.DisabledCallback()));
         new DAVLockFeature(session).unlock(test, lockId);
         new DAVDeleteFeature(session).delete(Collections.singletonList(test), new DisabledPasswordCallback(), new Delete.DisabledCallback());
     }

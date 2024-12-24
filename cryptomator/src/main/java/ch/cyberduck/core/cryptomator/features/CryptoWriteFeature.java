@@ -57,9 +57,7 @@ public class CryptoWriteFeature<Reply> implements Write<Reply> {
                 final NonceGenerator nonces = status.getLength() == TransferStatus.UNKNOWN_LENGTH ?
                         new RandomNonceGenerator(vault.getNonceSize()) :
                         new RotatingNonceGenerator(vault.getNonceSize(), vault.numberOfChunks(status.getLength()));
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Using %s", nonces));
-                }
+                log.debug("Using {}", nonces);
                 status.setNonces(nonces);
             }
             final StatusOutputStream<Reply> cleartext = proxy.write(vault.encrypt(session, file),
@@ -79,11 +77,6 @@ public class CryptoWriteFeature<Reply> implements Write<Reply> {
         catch(IOException e) {
             throw new DefaultIOExceptionMappingService().map(e);
         }
-    }
-
-    @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        return new Append(false).withStatus(status);
     }
 
     @Override

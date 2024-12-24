@@ -17,11 +17,15 @@ package ch.cyberduck.core.dav;
 
 import ch.cyberduck.core.AbstractProtocol;
 import ch.cyberduck.core.CredentialsConfigurator;
+import ch.cyberduck.core.Protocol;
 import ch.cyberduck.core.Scheme;
 import ch.cyberduck.core.WindowsIntegratedCredentialsConfigurator;
 
 import org.apache.commons.lang3.StringUtils;
 
+import com.google.auto.service.AutoService;
+
+@AutoService(Protocol.class)
 public class DAVProtocol extends AbstractProtocol {
     @Override
     public String getName() {
@@ -76,7 +80,7 @@ public class DAVProtocol extends AbstractProtocol {
     @Override
     public <T> T getFeature(final Class<T> type) {
         if(type == CredentialsConfigurator.class) {
-            return (T) new WindowsIntegratedCredentialsConfigurator();
+            return (T) new DAVWindowsIntegratedCredentialsConfigurator(new WindowsIntegratedCredentialsConfigurator(true));
         }
         return super.getFeature(type);
     }

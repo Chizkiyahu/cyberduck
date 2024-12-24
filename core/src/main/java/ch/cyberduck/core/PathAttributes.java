@@ -273,7 +273,7 @@ public class PathAttributes extends Attributes implements Serializable {
         }
         if(vault != null) {
             if(vault.attributes() == this) {
-                log.debug(String.format("Skip serializing vault attribute %s to avoid recursion", vault));
+                log.debug("Skip serializing vault attribute {} to avoid recursion", vault);
             }
             else {
                 dict.setObjectForKey(vault, "Vault");
@@ -342,6 +342,11 @@ public class PathAttributes extends Attributes implements Serializable {
 
     public void setCreationDate(final long millis) {
         this.created = millis;
+    }
+
+    public PathAttributes withCreationDate(final long millis) {
+        this.setCreationDate(millis);
+        return this;
     }
 
     @Override
@@ -585,6 +590,11 @@ public class PathAttributes extends Attributes implements Serializable {
 
     public void setHidden(final boolean hidden) {
         this.hidden = hidden;
+    }
+
+    public PathAttributes withHidden(final boolean hidden) {
+        this.setHidden(hidden);
+        return this;
     }
 
     public Map<String, String> getMetadata() {

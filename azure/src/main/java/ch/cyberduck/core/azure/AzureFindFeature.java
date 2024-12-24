@@ -46,7 +46,7 @@ public class AzureFindFeature implements Find {
     private final OperationContext context;
 
     private final PathContainerService containerService
-        = new DirectoryDelimiterPathContainerService();
+            = new DirectoryDelimiterPathContainerService();
 
     public AzureFindFeature(final AzureSession session, final OperationContext context) {
         this.session = session;
@@ -60,7 +60,6 @@ public class AzureFindFeature implements Find {
         }
         try {
             try {
-                final boolean found;
                 if(containerService.isContainer(file)) {
                     final CloudBlobContainer container = session.getClient().getContainerReference(containerService.getContainer(file).getName());
                     return container.exists(null, null, context);
@@ -83,9 +82,7 @@ public class AzureFindFeature implements Find {
                         }
                     }
                 }
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Search for common prefix %s", file));
-                }
+                log.debug("Search for common prefix {}", file);
                 // Check for common prefix
                 try {
                     new AzureObjectListService(session, context).list(file, new CancellingListProgressListener());

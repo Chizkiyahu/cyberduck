@@ -69,15 +69,11 @@ public class SparklePeriodicUpdateChecker extends AbstractPeriodicUpdateChecker 
     public void check(boolean background) {
         if(this.hasUpdatePrivileges()) {
             if(background) {
-                if(log.isDebugEnabled()) {
-                    log.debug("Check for update in background");
-                }
+                log.debug("Check for update in background");
                 updater.checkForUpdatesInBackground();
             }
             else {
-                if(log.isDebugEnabled()) {
-                    log.debug("Check for update");
-                }
+                log.debug("Check for update");
                 updater.checkForUpdates();
             }
         }
@@ -113,11 +109,9 @@ public class SparklePeriodicUpdateChecker extends AbstractPeriodicUpdateChecker 
 
         @Override
         public void standardUserDriverWillHandleShowingUpdate_forUpdate_state(final boolean handleShowingUpdate, final SUAppcastItem item, final SPUUserUpdateState state) {
-            if(!handleShowingUpdate) {
+            if(!state.userInitiated()) {
                 for(Handler handler : handlers) {
-                    if(log.isDebugEnabled()) {
-                        log.debug(String.format("Notify handler %s with update %s", handler, item));
-                    }
+                    log.debug("Notify handler {} with update {}", handler, item);
                     if(handler.handle(new Update(item.versionString(), item.displayVersionString()))) {
                         break;
                     }
@@ -129,9 +123,7 @@ public class SparklePeriodicUpdateChecker extends AbstractPeriodicUpdateChecker 
         public void updater_didFindValidUpdate(final SPUUpdater updater, final SUAppcastItem item) {
             if(updater.automaticallyDownloadsUpdates()) {
                 for(Handler handler : handlers) {
-                    if(log.isDebugEnabled()) {
-                        log.debug(String.format("Notify handler %s with update %s", handler, item));
-                    }
+                    log.debug("Notify handler {} with update {}", handler, item);
                     if(handler.handle(new Update(item.versionString(), item.displayVersionString()))) {
                         break;
                     }
@@ -140,8 +132,26 @@ public class SparklePeriodicUpdateChecker extends AbstractPeriodicUpdateChecker 
         }
 
         @Override
+        public void updaterWillRelaunchApplication(final SPUUpdater updater) {
+            for(Handler handler : handlers) {
+                log.debug("Notify handler {} for application relaunch", handler);
+                handler.quit();
+            }
+        }
+
+        @Override
         public String feedURLStringForUpdater(final ID updater) {
             return SparklePeriodicUpdateChecker.this.getFeedUrl();
+        }
+
+        @Override
+        public boolean updaterShouldRelaunchApplication(SPUUpdater updater) {
+            return true;
+        }
+
+        @Override
+        public boolean updaterShouldPromptForPermissionToCheckForUpdates(SPUUpdater updater) {
+            return false;
         }
     }
 }

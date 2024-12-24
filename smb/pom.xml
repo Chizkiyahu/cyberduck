@@ -18,13 +18,13 @@
     <parent>
         <groupId>ch.cyberduck</groupId>
         <artifactId>parent</artifactId>
-        <version>8.8.1</version>
+        <version>9.1.2-SNAPSHOT</version>
     </parent>
     <artifactId>smb</artifactId>
     <packaging>jar</packaging>
     <properties>
-        <smbj.version>0.13.0</smbj.version>
-        <testcontainers.version>1.19.7</testcontainers.version>
+        <smbj.version>0.14.0</smbj.version>
+        <testcontainers.version>1.20.4</testcontainers.version>
     </properties>
     <dependencies>
         <dependency>
@@ -47,7 +47,7 @@
         <dependency>
             <groupId>com.rapid7.client</groupId>
             <artifactId>dcerpc</artifactId>
-            <version>0.12.1</version>
+            <version>0.12.9</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.bouncycastle</groupId>

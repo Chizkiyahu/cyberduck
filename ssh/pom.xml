@@ -18,7 +18,7 @@
     <parent>
         <groupId>ch.cyberduck</groupId>
         <artifactId>parent</artifactId>
-        <version>8.8.1</version>
+        <version>9.1.2-SNAPSHOT</version>
     </parent>
     <artifactId>ssh</artifactId>
     <packaging>jar</packaging>
@@ -45,9 +45,9 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.hierynomus</groupId>
+            <groupId>ch.iterate.ssh</groupId>
             <artifactId>sshj</artifactId>
-            <version>${sshj-version}</version>
+            <version>0.39.2</version>
         </dependency>
         <dependency>
             <groupId>com.jcraft</groupId>
@@ -60,7 +60,7 @@
             <version>${jsch-agentproxy-version}</version>
             <exclusions>
                 <exclusion>
-                    <groupId>net.schmizz</groupId>
+                    <groupId>com.hierynomus</groupId>
                     <artifactId>sshj</artifactId>
                 </exclusion>
             </exclusions>
@@ -89,13 +89,13 @@
         <dependency>
             <groupId>org.cryptomator</groupId>
             <artifactId>cryptofs</artifactId>
-            <version>2.6.9</version>
+            <version>2.7.1</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.sshd</groupId>
             <artifactId>sshd-sftp</artifactId>
-            <version>2.12.1</version>
+            <version>2.14.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

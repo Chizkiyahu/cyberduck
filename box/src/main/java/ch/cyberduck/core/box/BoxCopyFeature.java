@@ -38,6 +38,9 @@ import org.apache.logging.log4j.Logger;
 import java.text.MessageFormat;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Optional;
+
+import static ch.cyberduck.core.features.Copy.validate;
 
 public class BoxCopyFeature implements Copy {
     private static final Logger log = LogManager.getLogger(BoxCopyFeature.class);
@@ -54,9 +57,7 @@ public class BoxCopyFeature implements Copy {
     public Path copy(final Path file, final Path target, final TransferStatus status, final ConnectionCallback callback, final StreamListener listener) throws BackgroundException {
         try {
             if(status.isExists()) {
-                if(log.isWarnEnabled()) {
-                    log.warn(String.format("Delete file %s to be replaced with %s", target, file));
-                }
+                log.warn("Delete file {} to be replaced with {}", target, file);
                 new BoxDeleteFeature(session, fileid).delete(Collections.singletonList(target), callback, new Delete.DisabledCallback());
             }
             if(file.isDirectory()) {
@@ -87,9 +88,13 @@ public class BoxCopyFeature implements Copy {
     }
 
     @Override
-    public void preflight(final Path source, final Path target) throws BackgroundException {
-        if(!BoxTouchFeature.validate(target.getName())) {
-            throw new InvalidFilenameException(MessageFormat.format(LocaleFactory.localizedString("Cannot create {0}", "Error"), target.getName()));
+    public void preflight(final Path source, final Optional<Path> optional) throws BackgroundException {
+        if(optional.isPresent()) {
+            final Path target = optional.get();
+            if(!BoxTouchFeature.validate(target.getName())) {
+                throw new InvalidFilenameException(MessageFormat.format(LocaleFactory.localizedString("Cannot create {0}", "Error"), target.getName()));
+            }
+            validate(session.getCaseSensitivity(), source, target);
         }
     }
 }

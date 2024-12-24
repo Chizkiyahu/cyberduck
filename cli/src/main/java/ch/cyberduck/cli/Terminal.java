@@ -16,53 +16,26 @@ package ch.cyberduck.cli;
  */
 
 import ch.cyberduck.core.*;
-import ch.cyberduck.core.azure.AzureProtocol;
-import ch.cyberduck.core.b2.B2Protocol;
-import ch.cyberduck.core.box.BoxProtocol;
-import ch.cyberduck.core.brick.BrickProtocol;
 import ch.cyberduck.core.cdn.Distribution;
-import ch.cyberduck.core.ctera.CteraProtocol;
-import ch.cyberduck.core.dav.DAVProtocol;
-import ch.cyberduck.core.dav.DAVSSLProtocol;
-import ch.cyberduck.core.dropbox.DropboxProtocol;
 import ch.cyberduck.core.editor.DefaultEditorListener;
 import ch.cyberduck.core.editor.Editor;
 import ch.cyberduck.core.editor.EditorFactory;
 import ch.cyberduck.core.exception.AccessDeniedException;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.NotfoundException;
-import ch.cyberduck.core.ftp.FTPProtocol;
-import ch.cyberduck.core.ftp.FTPTLSProtocol;
-import ch.cyberduck.core.googledrive.DriveProtocol;
-import ch.cyberduck.core.googlestorage.GoogleStorageProtocol;
-import ch.cyberduck.core.hubic.HubicProtocol;
 import ch.cyberduck.core.io.DisabledStreamListener;
-import ch.cyberduck.core.irods.IRODSProtocol;
 import ch.cyberduck.core.local.Application;
 import ch.cyberduck.core.local.ApplicationFinder;
 import ch.cyberduck.core.local.ApplicationFinderFactory;
 import ch.cyberduck.core.local.TemporaryFileServiceFactory;
 import ch.cyberduck.core.logging.LoggerPrintStream;
-import ch.cyberduck.core.manta.MantaProtocol;
-import ch.cyberduck.core.nextcloud.NextcloudProtocol;
-import ch.cyberduck.core.nio.LocalProtocol;
-import ch.cyberduck.core.onedrive.OneDriveProtocol;
-import ch.cyberduck.core.onedrive.SharepointProtocol;
-import ch.cyberduck.core.onedrive.SharepointSiteProtocol;
-import ch.cyberduck.core.openstack.SwiftProtocol;
-import ch.cyberduck.core.owncloud.OwncloudProtocol;
 import ch.cyberduck.core.pool.SessionPool;
 import ch.cyberduck.core.preferences.Preferences;
 import ch.cyberduck.core.preferences.PreferencesFactory;
-import ch.cyberduck.core.s3.S3Protocol;
-import ch.cyberduck.core.sds.SDSProtocol;
-import ch.cyberduck.core.sftp.SFTPProtocol;
-import ch.cyberduck.core.smb.SMBProtocol;
-import ch.cyberduck.core.spectra.SpectraProtocol;
+import ch.cyberduck.core.serviceloader.AutoServiceLoaderFactory;
 import ch.cyberduck.core.ssl.CertificateStoreX509TrustManager;
 import ch.cyberduck.core.ssl.DefaultTrustManagerHostnameCallback;
 import ch.cyberduck.core.ssl.PreferencesX509KeyManager;
-import ch.cyberduck.core.storegate.StoregateProtocol;
 import ch.cyberduck.core.threading.DisabledAlertCallback;
 import ch.cyberduck.core.threading.DisconnectBackgroundAction;
 import ch.cyberduck.core.threading.SessionBackgroundAction;
@@ -82,8 +55,9 @@ import ch.cyberduck.core.worker.CreateDirectoryWorker;
 import ch.cyberduck.core.worker.DeleteWorker;
 import ch.cyberduck.core.worker.DistributionPurgeWorker;
 import ch.cyberduck.core.worker.HomeFinderWorker;
+import ch.cyberduck.core.worker.ListWorker;
 import ch.cyberduck.core.worker.LoadVaultWorker;
-import ch.cyberduck.core.worker.SessionListWorker;
+import ch.cyberduck.core.worker.MoveWorker;
 import ch.cyberduck.core.worker.Worker;
 
 import org.apache.commons.cli.CommandLine;
@@ -100,6 +74,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 
@@ -132,41 +107,11 @@ public class Terminal {
     public Terminal(final ProtocolFactory protocols, final TerminalPreferences defaults, final Options options, final CommandLine input) {
         this.protocols = protocols;
         this.preferences = defaults.withDefaults(input);
-        this.protocols.register(
-                new FTPProtocol(),
-                new FTPTLSProtocol(),
-                new SFTPProtocol(),
-                new DAVProtocol(),
-                new DAVSSLProtocol(),
-                new SMBProtocol(),
-                new SwiftProtocol(),
-                new S3Protocol(),
-                new GoogleStorageProtocol(),
-                new AzureProtocol(),
-                new IRODSProtocol(),
-                new SpectraProtocol(),
-                new B2Protocol(),
-                new DriveProtocol(),
-                new HubicProtocol(),
-                new DropboxProtocol(),
-                new DropboxProtocol(),
-                new OneDriveProtocol(),
-                new SharepointProtocol(),
-                new SharepointSiteProtocol(),
-                new LocalProtocol(),
-                new SDSProtocol(),
-                new MantaProtocol(),
-                new StoregateProtocol(),
-                new BrickProtocol(),
-                new NextcloudProtocol(),
-                new OwncloudProtocol(),
-                new CteraProtocol(),
-                new BoxProtocol()
-        );
-        this.options = options;
-        if(log.isInfoEnabled()) {
-            log.info(String.format("Parsed options %s from input %s", options, input));
+        for(Protocol p : AutoServiceLoaderFactory.<Protocol>get().load(Protocol.class)) {
+            protocols.register(p);
         }
+        this.options = options;
+        log.info("Parsed options {} from input {}", options, input);
         this.input = input;
         this.cache = new PathCache(preferences.getInteger("browser.cache.size"));
         this.progress = input.hasOption(TerminalOptionsBuilder.Params.quiet.name())
@@ -212,11 +157,12 @@ public class Terminal {
             System.exit(1);
         }
         catch(FactoryException e) {
-            console.printf("%s%n", e.getMessage());
+            console.printf("Configuration error %s%n", e.getMessage());
             System.exit(1);
         }
         catch(Throwable error) {
-            error.printStackTrace(System.err);
+            console.printf("Fatal error %s%n", error.getMessage());
+            error.printStackTrace(new LoggerPrintStream());
             System.exit(1);
         }
         finally {
@@ -242,9 +188,7 @@ public class Terminal {
             final String file = input.getOptionValue(TerminalOptionsBuilder.Params.profile.name());
             try {
                 final Profile profile = ProfileReaderFactory.get().read(LocalFactory.get(file));
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Register profile %s", profile));
-                }
+                log.debug("Register profile {}", profile);
                 protocols.register(profile);
             }
             catch(AccessDeniedException e) {
@@ -300,9 +244,7 @@ public class Terminal {
                 else {
                     vault = new Path(input.getOptionValue(TerminalOptionsBuilder.Params.vault.name()), EnumSet.of(Path.Type.directory, Path.Type.vault));
                 }
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Attempting to load vault from %s", vault));
-                }
+                log.debug("Attempting to load vault from {}", vault);
                 try {
                     this.execute(new TerminalBackgroundAction<>(controller, source, new LoadVaultWorker(new LoadingVaultLookupListener(source.getVaultRegistry(),
                             new TerminalPasswordCallback()), vault)));
@@ -329,6 +271,7 @@ public class Terminal {
                                 case edit:
                                 case download:
                                 case copy:
+                                case move:
                                 case synchronize:
                                 case delete:
                                     // We expect file on server to exist
@@ -362,18 +305,23 @@ public class Terminal {
             switch(action) {
                 case download:
                 case upload:
-                case synchronize:
-                    return this.transfer(login, new TerminalTransferFactory().create(input, host, remote,
-                                    new ArrayList<>(new SingleTransferItemFinder().find(input, action, remote))),
-                            source, SessionPool.DISCONNECTED);
-                case copy:
+                case synchronize: {
+                    final Transfer transfer = new TerminalTransferFactory().create(input, host, remote,
+                            new ArrayList<>(new SingleTransferItemFinder().find(input, action, remote)));
+                    return this.transfer(login, transfer, source, SessionPool.DISCONNECTED);
+                }
+                case copy: {
                     final Host target = new CommandLineUriParser(input).parse(input.getOptionValues(action.name())[1]);
                     destination = SessionPoolFactory.create(connect, transcript, target,
                             new CertificateStoreX509TrustManager(new DisabledCertificateTrustCallback(), new DefaultTrustManagerHostnameCallback(target), new TerminalCertificateStore(reader)),
                             new PreferencesX509KeyManager(target, new TerminalCertificateStore(reader)), registry);
-                    return this.transfer(login, new CopyTransfer(
-                                    host, target, Collections.singletonMap(remote, new CommandLinePathParser(input, protocols).parse(input.getOptionValues(action.name())[1]))).withCache(cache),
-                            source, destination);
+                    final CopyTransfer transfer = new CopyTransfer(host, target,
+                            Collections.singletonMap(remote, new CommandLinePathParser(input, protocols).parse(input.getOptionValues(action.name())[1])));
+                    return this.transfer(login, transfer.withCache(cache), source, destination);
+                }
+                case move:
+                    final Path target = new CommandLinePathParser(input, protocols).parse(input.getOptionValues(action.name())[1]);
+                    return this.move(source, remote, target);
                 default:
                     throw new BackgroundException(LocaleFactory.localizedString("Unknown"),
                             String.format("Unknown transfer type %s", action.name()));
@@ -470,7 +418,7 @@ public class Terminal {
     }
 
     protected Exit list(final SessionPool session, final Path remote, final boolean verbose) {
-        final SessionListWorker worker = new SessionListWorker(cache, remote,
+        final ListWorker worker = new ListWorker(cache, remote,
                 new TerminalListProgressListener(verbose));
         final SessionBackgroundAction<AttributedList<Path>> action = new TerminalBackgroundAction<>(
                 controller,
@@ -497,6 +445,18 @@ public class Terminal {
             worker = new DeleteWorker(new TerminalLoginCallback(reader), files, progress, new NullFilter<>());
         }
         final SessionBackgroundAction<List<Path>> action = new TerminalBackgroundAction<>(controller, session, worker);
+        try {
+            this.execute(action);
+        }
+        catch(TerminalBackgroundException e) {
+            return Exit.failure;
+        }
+        return Exit.success;
+    }
+
+    protected Exit move(final SessionPool session, final Path remote, final Path target) {
+        final MoveWorker worker = new MoveWorker(Collections.singletonMap(remote, target), session, cache, progress, new TerminalLoginCallback(reader));
+        final SessionBackgroundAction<Map<Path, Path>> action = new TerminalBackgroundAction<>(controller, session, worker);
         try {
             this.execute(action);
         }
@@ -606,7 +566,7 @@ public class Terminal {
         }
     }
 
-    private static final class TerminalBackgroundException extends BackgroundException {
+    public static final class TerminalBackgroundException extends BackgroundException {
         public TerminalBackgroundException(final Throwable cause) {
             super(cause);
         }

@@ -294,6 +294,8 @@
         <true/>
         <key>SUFeedURL</key>
         <string>${SPARKLEFEED}</string>
+        <key>SUEnableAutomaticChecks</key>
+        <false/>
         #endif
         <key>NSServices</key>
         <array>

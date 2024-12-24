@@ -17,24 +17,31 @@ package ch.cyberduck.core.diagnostics;
 
 import ch.cyberduck.core.CertificateStore;
 import ch.cyberduck.core.CertificateStoreFactory;
+import ch.cyberduck.core.DefaultIOExceptionMappingService;
 import ch.cyberduck.core.DisabledCertificateIdentityCallback;
 import ch.cyberduck.core.DisabledCertificateTrustCallback;
 import ch.cyberduck.core.DisabledLoginCallback;
 import ch.cyberduck.core.DisabledTranscriptListener;
 import ch.cyberduck.core.Host;
 import ch.cyberduck.core.HostUrlProvider;
+import ch.cyberduck.core.exception.BackgroundException;
+import ch.cyberduck.core.exception.ConnectionCanceledException;
+import ch.cyberduck.core.http.DefaultHttpResponseExceptionMappingService;
 import ch.cyberduck.core.http.HttpConnectionPoolBuilder;
 import ch.cyberduck.core.proxy.ProxyFactory;
 import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.ssl.DefaultTrustManagerHostnameCallback;
 import ch.cyberduck.core.ssl.KeychainX509KeyManager;
 import ch.cyberduck.core.ssl.KeychainX509TrustManager;
+import ch.cyberduck.core.ssl.SSLExceptionMappingService;
 import ch.cyberduck.core.ssl.ThreadLocalHostnameDelegatingTrustManager;
 import ch.cyberduck.core.ssl.X509KeyManager;
 import ch.cyberduck.core.ssl.X509TrustManager;
+import ch.cyberduck.core.worker.DefaultExceptionMappingService;
 
 import org.apache.http.HttpStatus;
 import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.HttpResponseException;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpHead;
 import org.apache.http.client.methods.HttpRequestBase;
@@ -64,61 +71,58 @@ public class HttpReachability implements Reachability {
     }
 
     @Override
-    public boolean isReachable(final Host bookmark) {
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Test reachability for %s", bookmark));
-        }
+    public void test(final Host bookmark) throws BackgroundException {
+        log.debug("Test reachability for {}", bookmark);
         final X509TrustManager trust = new KeychainX509TrustManager(new DisabledCertificateTrustCallback(),
                 new DefaultTrustManagerHostnameCallback(bookmark), store);
         final X509KeyManager key = new KeychainX509KeyManager(new DisabledCertificateIdentityCallback(), bookmark,
                 store);
         final HttpConnectionPoolBuilder builder = new HttpConnectionPoolBuilder(bookmark,
                 new ThreadLocalHostnameDelegatingTrustManager(trust, bookmark.getHostname()), key, Reachability.timeout, proxy);
-        final HttpClientBuilder configuration = builder.build(proxy.find(new HostUrlProvider().get(bookmark)),
+        final HttpClientBuilder configuration = builder.build(proxy,
                 new DisabledTranscriptListener(), new DisabledLoginCallback());
+        configuration.disableRedirectHandling();
+        configuration.disableAutomaticRetries();
         try (CloseableHttpClient client = configuration.build()) {
             final HttpRequestBase resource = new HttpHead(new HostUrlProvider().withUsername(false).withPath(true).get(bookmark));
             final CloseableHttpResponse response = client.execute(resource);
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Received response %s", response));
-            }
+            log.debug("Received response {}", response);
             EntityUtils.consume(response.getEntity());
             switch(response.getStatusLine().getStatusCode()) {
                 case HttpStatus.SC_BAD_GATEWAY:
                 case HttpStatus.SC_INTERNAL_SERVER_ERROR:
                 case HttpStatus.SC_SERVICE_UNAVAILABLE:
                 case HttpStatus.SC_GATEWAY_TIMEOUT:
-                    if(log.isWarnEnabled()) {
-                        log.warn(String.format("HTTP error %s determined offline status", response));
-                    }
-                    return false;
+                    log.warn("HTTP error {} determined offline status", response);
+                    throw new DefaultHttpResponseExceptionMappingService().map(new HttpResponseException(response.getStatusLine().getStatusCode(),
+                            response.getStatusLine().getReasonPhrase()));
             }
         }
         catch(ClientProtocolException e) {
-            if(log.isWarnEnabled()) {
-                log.warn(String.format("Ignore HTTP error response %s", e));
-            }
+            log.warn("Ignore HTTP error response {}", e.getMessage());
         }
         catch(SSLException e) {
-            if(log.isWarnEnabled()) {
-                log.warn(String.format("Ignore SSL failure %s", e));
+            try {
+                throw new SSLExceptionMappingService().map(e);
             }
-            return true;
+            catch(ConnectionCanceledException c) {
+                // Certificate error only
+                log.warn("Ignore SSL failure {}", e.getMessage());
+            }
         }
         catch(SocketException e) {
-            if(log.isWarnEnabled()) {
-                log.warn(String.format("Failure %s opening socket for %s", e, bookmark));
-            }
-            return false;
+            log.warn("Failure {} opening socket for {}", e, bookmark);
+            throw new DefaultIOExceptionMappingService().map(e);
         }
         catch(IOException e) {
-            if(log.isWarnEnabled()) {
-                log.warn(String.format("Generic failure %s for %s", e, bookmark));
-            }
-            return false;
+            log.warn("Generic failure {} for {}", e, bookmark);
+            throw new DefaultIOExceptionMappingService().map(e);
+        }
+        catch(IllegalArgumentException e) {
+            log.warn("Parsing URI {}: {}", bookmark, e);
+            throw new DefaultExceptionMappingService().map(e);
         }
         // Ignore
-        return true;
     }
 
     @Override

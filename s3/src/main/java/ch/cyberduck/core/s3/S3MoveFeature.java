@@ -31,18 +31,16 @@ import ch.cyberduck.core.io.DisabledStreamListener;
 import ch.cyberduck.core.transfer.TransferStatus;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.jets3t.service.ServiceException;
 import org.jets3t.service.VersionOrDeleteMarkersChunk;
 import org.jets3t.service.model.BaseVersionOrDeleteMarker;
 
 import java.util.Collections;
+import java.util.Optional;
 
 import static ch.cyberduck.core.s3.S3VersionedObjectListService.KEY_DELETE_MARKER;
 
 public class S3MoveFeature implements Move {
-    private static final Logger log = LogManager.getLogger(S3MoveFeature.class);
 
     private final S3Session session;
     private final PathContainerService containerService;
@@ -53,7 +51,7 @@ public class S3MoveFeature implements Move {
         this.session = session;
         this.containerService = session.getFeature(PathContainerService.class);
         this.proxy = new S3ThresholdCopyFeature(session, acl);
-        this.delete = new S3DefaultDeleteFeature(session);
+        this.delete = new S3DefaultDeleteFeature(session, acl);
     }
 
     @Override
@@ -104,7 +102,7 @@ public class S3MoveFeature implements Move {
     }
 
     @Override
-    public void preflight(final Path source, final Path target) throws BackgroundException {
+    public void preflight(final Path source, final Optional<Path> target) throws BackgroundException {
         proxy.preflight(source, target);
         delete.preflight(source);
     }

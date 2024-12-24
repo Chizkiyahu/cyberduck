@@ -29,6 +29,8 @@ import org.apache.logging.log4j.Logger;
  * Encapsulating UNIX file permissions.
  */
 public class Permission implements Serializable {
+    private static final Logger log = LogManager.getLogger(Permission.class);
+
     public static final Permission EMPTY = new Permission(Action.none, Action.none, Action.none) {
         @Override
         public boolean isExecutable() {
@@ -60,7 +62,7 @@ public class Permission implements Serializable {
             return "--";
         }
     };
-    private static final Logger log = LogManager.getLogger(Permission.class);
+
     private Action user;
     private Action group;
     private Action other;
@@ -129,7 +131,7 @@ public class Permission implements Serializable {
             this.fromInteger(Integer.valueOf(Integer.toString(mode), 8));
         }
         catch(NumberFormatException e) {
-            log.warn(String.format("Failure parsing %s", mode));
+            log.warn("Failure parsing {}", mode);
             this.set(Permission.EMPTY);
         }
     }
@@ -227,7 +229,7 @@ public class Permission implements Serializable {
             this.fromInteger(n);
         }
         catch(StringIndexOutOfBoundsException e) {
-            log.warn(String.format("Failure parsing %s", symbol));
+            log.warn("Failure parsing {}", symbol);
             this.set(Permission.EMPTY);
         }
     }

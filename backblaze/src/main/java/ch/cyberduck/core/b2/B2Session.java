@@ -30,7 +30,7 @@ import ch.cyberduck.core.http.CustomServiceUnavailableRetryStrategy;
 import ch.cyberduck.core.http.ExecutionCountServiceUnavailableRetryStrategy;
 import ch.cyberduck.core.http.HttpSession;
 import ch.cyberduck.core.preferences.HostPreferences;
-import ch.cyberduck.core.proxy.Proxy;
+import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.ssl.X509KeyManager;
 import ch.cyberduck.core.ssl.X509TrustManager;
 import ch.cyberduck.core.threading.CancelCallback;
@@ -60,7 +60,7 @@ public class B2Session extends HttpSession<B2ApiClient> {
     }
 
     @Override
-    protected B2ApiClient connect(final Proxy proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) {
+    protected B2ApiClient connect(final ProxyFinder proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) {
         final HttpClientBuilder configuration = builder.build(proxy, this, prompt);
         configuration.setServiceUnavailableRetryStrategy(new CustomServiceUnavailableRetryStrategy(
                 host, new ExecutionCountServiceUnavailableRetryStrategy(retryHandler = new B2ErrorResponseInterceptor(this, fileid))));
@@ -82,7 +82,7 @@ public class B2Session extends HttpSession<B2ApiClient> {
     }
 
     @Override
-    public void login(final Proxy proxy, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
+    public void login(final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
         try {
             final String accountId = host.getCredentials().getUsername();
             final String applicationKey = host.getCredentials().getPassword();
@@ -97,15 +97,11 @@ public class B2Session extends HttpSession<B2ApiClient> {
             retryHandler.setTokens(accountId, applicationKey, response.getAuthorizationToken());
             if(new HostPreferences(host).getBoolean("b2.upload.largeobject.auto")) {
                 final int recommendedPartSize = response.getRecommendedPartSize();
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Set large upload part size to %d", recommendedPartSize));
-                }
+                log.debug("Set large upload part size to {}", recommendedPartSize);
                 host.setProperty("b2.upload.largeobject.size", String.valueOf(recommendedPartSize));
                 host.setProperty("b2.copy.largeobject.size", String.valueOf(recommendedPartSize));
                 final int absoluteMinimumPartSize = response.getAbsoluteMinimumPartSize();
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Set large upload minimum part size to %d", absoluteMinimumPartSize));
-                }
+                log.debug("Set large upload minimum part size to {}", absoluteMinimumPartSize);
                 host.setProperty("b2.upload.largeobject.size.minimum", String.valueOf(absoluteMinimumPartSize));
             }
         }

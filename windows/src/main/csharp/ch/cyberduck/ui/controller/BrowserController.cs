@@ -16,6 +16,11 @@
 // feedback@cyberduck.io
 // 
 
+using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.IO;
+using System.Windows.Forms;
 using BrightIdeasSoftware;
 using ch.cyberduck.core;
 using ch.cyberduck.core.bonjour;
@@ -34,6 +39,7 @@ using ch.cyberduck.core.vault;
 using ch.cyberduck.core.worker;
 using ch.cyberduck.ui.browser;
 using ch.cyberduck.ui.comparator;
+using ch.cyberduck.ui.Views;
 using Ch.Cyberduck.Core;
 using Ch.Cyberduck.Core.Local;
 using Ch.Cyberduck.Core.Refresh.Interactivity;
@@ -46,20 +52,17 @@ using java.text;
 using java.util;
 using org.apache.logging.log4j;
 using StructureMap;
-using System;
-using System.Collections.Generic;
-using System.Collections.Specialized;
-using System.IO;
-using System.Windows.Forms;
 using Windows.Win32;
 using static Ch.Cyberduck.ImageHelper;
 using static Windows.Win32.UI.WindowsAndMessaging.MESSAGEBOX_RESULT;
 using Application = ch.cyberduck.core.local.Application;
 using Directory = ch.cyberduck.core.features.Directory;
 using Exception = System.Exception;
+using Optional = java.util.Optional;
 using Path = ch.cyberduck.core.Path;
 using String = System.String;
 using StringBuilder = System.Text.StringBuilder;
+using TransferItem = ch.cyberduck.core.transfer.TransferItem;
 using X509Certificate = java.security.cert.X509Certificate;
 using X509Certificate2 = System.Security.Cryptography.X509Certificates.X509Certificate2;
 using X509Certificate2UI = System.Security.Cryptography.X509Certificates.X509Certificate2UI;
@@ -749,15 +752,7 @@ namespace Ch.Cyberduck.Ui.Controller
                 }
                 foreach (Host promisedDragBookmark in dropargs.SourceModels)
                 {
-                    _bookmarkModel.Source.remove(promisedDragBookmark);
-                    if (destIndex > _bookmarkModel.Source.size())
-                    {
-                        _bookmarkModel.Source.add(promisedDragBookmark);
-                    }
-                    else
-                    {
-                        _bookmarkModel.Source.add(destIndex, promisedDragBookmark);
-                    }
+                    _bookmarkModel.Source.move(sourceIndex, destIndex);
                     //view.selectRowIndexes(NSIndexSet.indexSetWithIndex(row), false);
                     //view.scrollRowToVisible(row);
                 }
@@ -1054,7 +1049,7 @@ namespace Ch.Cyberduck.Ui.Controller
                         Move move = (Move)Session.getFeature(typeof(Move));
                         foreach (Path sourcePath in args.SourceModels)
                         {
-                            if (!move.isSupported(sourcePath, destination))
+                            if (!move.isSupported(sourcePath, Optional.of(new Path(destination, sourcePath.getName(), sourcePath.getType()))))
                             {
                                 args.Effect = DragDropEffects.None;
                                 args.DropTargetLocation = DropTargetLocation.None;
@@ -1382,7 +1377,7 @@ namespace Ch.Cyberduck.Ui.Controller
             else
             {
                 bookmark =
-                    new Host(ProtocolFactory.get().forName(PreferencesFactory.get()
+                    new Host(ProtocolFactory.get().forNameOrDefault(PreferencesFactory.get()
                         .getProperty("connection.protocol.default")));
             }
             ToggleView(BrowserView.Bookmark);
@@ -2019,7 +2014,15 @@ namespace Ch.Cyberduck.Ui.Controller
 
         private bool View_ValidateDuplicateFile()
         {
-            return IsMounted() && Session.getFeature(typeof(Copy)) != null && SelectedPaths.Count == 1;
+            if (IsMounted() && SelectedPaths.Count == 1)
+            {
+                if (null == SelectedPath)
+                {
+                    return false;
+                }
+                return ((Copy)Session.getFeature(typeof(Copy))).isSupported(SelectedPath, Optional.empty());
+            }
+            return false;
         }
 
         private bool View_ValidateRenameFile()
@@ -2030,7 +2033,7 @@ namespace Ch.Cyberduck.Ui.Controller
                 {
                     return false;
                 }
-                return ((Move)Session.getFeature(typeof(Move))).isSupported(SelectedPath, SelectedPath);
+                return ((Move)Session.getFeature(typeof(Move))).isSupported(SelectedPath, Optional.empty());
             }
             return false;
         }
@@ -2281,53 +2284,19 @@ namespace Ch.Cyberduck.Ui.Controller
 
         private void View_ShowTransfers()
         {
-            ITransferView view = TransferController.Instance.View;
-
-            bool isOnCurrentDesktop = true;
+            Guid? currentDesktop = null;
             try
             {
-                isOnCurrentDesktop = view.IsOnCurrentDesktop();
+                currentDesktop = View.GetDesktopId();
             }
             catch (Exception e)
             {
                 if (Log.isDebugEnabled())
                 {
-                    Log.debug("Failure determining whether window is on current desktop", e);
+                    Log.debug("Cannot get browser window desktop id", e);
                 }
             }
-
-            if (!isOnCurrentDesktop)
-            {
-                Guid? currentDesktop = null;
-                try
-                {
-                    currentDesktop = View.GetDesktopId();
-                }
-                catch (Exception e)
-                {
-                    if (Log.isDebugEnabled())
-                    {
-                        Log.debug("Cannot get browser window desktop id", e);
-                    }
-                }
-
-                if (currentDesktop is { } id)
-                {
-                    try
-                    {
-                        view.MoveToDesktop(id);
-                    }
-                    catch (Exception e)
-                    {
-                        if (Log.isDebugEnabled())
-                        {
-                            Log.debug("cannot move window to desktop.", e);
-                        }
-                    }
-                }
-            }
-            
-            view.Show();
+            TransferController.Instance.ShowWindow(currentDesktop);
         }
 
         private void View_ShowInspector()
@@ -2393,7 +2362,8 @@ namespace Ch.Cyberduck.Ui.Controller
                 _file = file;
             }
 
-            public void callback() {
+            public void callback()
+            {
                 _editors.Remove(_file);
             }
         }
@@ -2964,7 +2934,7 @@ namespace Ch.Cyberduck.Ui.Controller
         {
             CallbackDelegate run = delegate
             {
-                _scheduler?.shutdown();
+                _scheduler?.shutdown(false);
                 Session.shutdown();
                 Session = SessionPool.DISCONNECTED;
                 SetWorkdir(null);
@@ -3338,7 +3308,7 @@ namespace Ch.Cyberduck.Ui.Controller
             {
             }
 
-            private class InnerListWorker : SessionListWorker
+            private class InnerListWorker : ListWorker
             {
                 private readonly BrowserController _controller;
                 private readonly Path _folder;
@@ -3539,7 +3509,7 @@ namespace Ch.Cyberduck.Ui.Controller
                         _controller.View.CertBasedConnection = _pool.getFeature(typeof(X509TrustManager)) != null;
                         _controller.View.SecureConnectionVisible = true;
                         _controller._scheduler = (Scheduler)_pool.getFeature(typeof(Scheduler));
-                        _controller._scheduler?.repeat(_pool, PasswordCallbackFactory.get(_controller));
+                        _controller._scheduler?.repeat(PasswordCallbackFactory.get(_controller));
                     }
                 }
             }

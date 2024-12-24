@@ -27,6 +27,7 @@ import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.NotfoundException;
 import ch.cyberduck.core.preferences.HostPreferences;
 import ch.cyberduck.core.s3.S3AbstractListService;
+import ch.cyberduck.core.s3.S3PathContainerService;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
@@ -54,7 +55,7 @@ public class SpectraObjectListService extends S3AbstractListService {
     public SpectraObjectListService(final SpectraSession session) {
         super(session);
         this.session = session;
-        this.containerService = session.getFeature(PathContainerService.class);
+        this.containerService = new S3PathContainerService(session.getHost());
     }
 
     @Override
@@ -84,9 +85,7 @@ public class SpectraObjectListService extends S3AbstractListService {
                 for(final Contents object : response.getListBucketResult().getObjects()) {
                     final String key = object.getKey();
                     if(new SimplePathPredicate(PathNormalizer.compose(bucket, key)).test(directory)) {
-                        if(log.isDebugEnabled()) {
-                            log.debug(String.format("Skip placeholder key %s", key));
-                        }
+                        log.debug("Skip placeholder key {}", key);
                         hasDirectoryPlaceholder = true;
                         continue;
                     }
@@ -96,9 +95,7 @@ public class SpectraObjectListService extends S3AbstractListService {
                 for(final Contents object : response.getListBucketResult().getVersionedObjects()) {
                     final String key = object.getKey();
                     if(new SimplePathPredicate(PathNormalizer.compose(bucket, key)).test(directory)) {
-                        if(log.isDebugEnabled()) {
-                            log.debug(String.format("Skip placeholder key %s", key));
-                        }
+                        log.debug("Skip placeholder key {}", key);
                         hasDirectoryPlaceholder = true;
                         continue;
                     }
@@ -133,9 +130,7 @@ public class SpectraObjectListService extends S3AbstractListService {
             }
             while(truncated);
             if(!hasDirectoryPlaceholder && objects.isEmpty()) {
-                if(log.isWarnEnabled()) {
-                    log.warn(String.format("No placeholder found for directory %s", directory));
-                }
+                log.warn("No placeholder found for directory {}", directory);
                 throw new NotfoundException(directory.getAbsolute());
             }
             return objects;

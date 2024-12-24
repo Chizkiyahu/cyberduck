@@ -29,6 +29,7 @@ import ch.cyberduck.core.preferences.PreferencesFactory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 public class DecryptingListProgressListener extends IndexedListProgressListener {
@@ -53,9 +54,7 @@ public class DecryptingListProgressListener extends IndexedListProgressListener 
     @Override
     public void visit(final AttributedList<Path> list, final int index, final Path f) {
         if(skip.accept(f)) {
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Skip decrypting %s", f));
-            }
+            log.debug("Skip decrypting {}", f);
             list.remove(index);
             return;
         }
@@ -64,16 +63,21 @@ public class DecryptingListProgressListener extends IndexedListProgressListener 
             list.set(index, vault.decrypt(session, f));
         }
         catch(BackgroundException e) {
-            log.error(String.format("Failure %s decrypting %s", e, f));
+            log.error("Failure {} decrypting {}", e, f);
             list.remove(index);
         }
     }
 
     @Override
-    public void chunk(final Path folder, final AttributedList<Path> list) throws ConnectionCanceledException {
-        super.chunk(folder, list);
-        delegate.chunk(folder, list);
-        super.chunk(folder, list);
+    public void chunk(final Path directory, final AttributedList<Path> list) throws ConnectionCanceledException {
+        super.chunk(directory, list);
+        delegate.chunk(directory, list);
+        super.chunk(directory, list);
+    }
+
+    @Override
+    public void finish(final Path directory, final AttributedList<Path> list, final Optional<BackgroundException> e) throws ConnectionCanceledException {
+        delegate.finish(directory, list, e);
     }
 
     @Override

@@ -21,7 +21,6 @@ import ch.cyberduck.core.Path;
 import ch.cyberduck.core.date.MDTMSecondsDateFormatter;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.features.Timestamp;
-import ch.cyberduck.core.shared.DefaultTimestampFeature;
 import ch.cyberduck.core.transfer.TransferStatus;
 
 import org.apache.logging.log4j.LogManager;
@@ -31,7 +30,7 @@ import java.io.IOException;
 import java.util.Date;
 import java.util.TimeZone;
 
-public class FTPUTIMETimestampFeature extends DefaultTimestampFeature implements Timestamp {
+public class FTPUTIMETimestampFeature implements Timestamp {
     private static final Logger log = LogManager.getLogger(FTPUTIMETimestampFeature.class);
 
     private final FTPSession session;
@@ -45,9 +44,7 @@ public class FTPUTIMETimestampFeature extends DefaultTimestampFeature implements
     @Override
     public void setTimestamp(final Path file, final TransferStatus status) throws BackgroundException {
         if(failure != null) {
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Skip setting timestamp for %s due to previous failure %s", file, failure.getMessage()));
-            }
+            log.debug("Skip setting timestamp for {} due to previous failure {}", file, failure.getMessage());
             throw new FTPExceptionMappingService().map("Cannot change timestamp of {0}", failure, file);
         }
         try {

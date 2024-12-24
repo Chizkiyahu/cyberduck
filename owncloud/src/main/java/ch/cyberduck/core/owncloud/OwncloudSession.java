@@ -16,11 +16,14 @@ package ch.cyberduck.core.owncloud;
  */
 
 import ch.cyberduck.core.Credentials;
+import ch.cyberduck.core.DefaultIOExceptionMappingService;
 import ch.cyberduck.core.Host;
+import ch.cyberduck.core.HostKeyCallback;
 import ch.cyberduck.core.ListService;
 import ch.cyberduck.core.LoginCallback;
 import ch.cyberduck.core.OAuthTokens;
 import ch.cyberduck.core.UrlProvider;
+import ch.cyberduck.core.dav.DAVClient;
 import ch.cyberduck.core.dav.DAVDirectoryFeature;
 import ch.cyberduck.core.dav.DAVSession;
 import ch.cyberduck.core.dav.DAVTouchFeature;
@@ -39,10 +42,10 @@ import ch.cyberduck.core.features.Upload;
 import ch.cyberduck.core.features.Versioning;
 import ch.cyberduck.core.features.Write;
 import ch.cyberduck.core.http.CustomServiceUnavailableRetryStrategy;
+import ch.cyberduck.core.http.DefaultHttpResponseExceptionMappingService;
 import ch.cyberduck.core.http.ExecutionCountServiceUnavailableRetryStrategy;
 import ch.cyberduck.core.http.HttpUploadFeature;
 import ch.cyberduck.core.nextcloud.NextcloudDeleteFeature;
-import ch.cyberduck.core.nextcloud.NextcloudHomeFeature;
 import ch.cyberduck.core.nextcloud.NextcloudListService;
 import ch.cyberduck.core.nextcloud.NextcloudShareFeature;
 import ch.cyberduck.core.nextcloud.NextcloudUrlProvider;
@@ -50,32 +53,65 @@ import ch.cyberduck.core.nextcloud.NextcloudWriteFeature;
 import ch.cyberduck.core.oauth.OAuth2AuthorizationService;
 import ch.cyberduck.core.oauth.OAuth2ErrorResponseInterceptor;
 import ch.cyberduck.core.oauth.OAuth2RequestInterceptor;
-import ch.cyberduck.core.proxy.Proxy;
-import ch.cyberduck.core.shared.DefaultPathHomeFeature;
+import ch.cyberduck.core.ocs.OcsCapabilities;
+import ch.cyberduck.core.ocs.OcsCapabilitiesRequest;
+import ch.cyberduck.core.ocs.OcsCapabilitiesResponseHandler;
+import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.shared.DelegatingHomeFeature;
 import ch.cyberduck.core.shared.WorkdirHomeFeature;
 import ch.cyberduck.core.ssl.X509KeyManager;
 import ch.cyberduck.core.ssl.X509TrustManager;
 import ch.cyberduck.core.threading.CancelCallback;
+import ch.cyberduck.core.tus.TusCapabilities;
+import ch.cyberduck.core.tus.TusCapabilitiesRequest;
+import ch.cyberduck.core.tus.TusCapabilitiesResponseHandler;
+import ch.cyberduck.core.tus.TusWriteFeature;
 
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.http.client.HttpResponseException;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.IOException;
+
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.exceptions.JWTDecodeException;
+
+import static ch.cyberduck.core.tus.TusCapabilities.TUS_VERSION;
 
 public class OwncloudSession extends DAVSession {
     private static final Logger log = LogManager.getLogger(OwncloudSession.class);
 
     private OAuth2RequestInterceptor authorizationService;
 
+    protected final TusCapabilities tus = new TusCapabilities();
+    protected final OcsCapabilities ocs = new OcsCapabilities();
+
     public OwncloudSession(final Host host, final X509TrustManager trust, final X509KeyManager key) {
         super(host, trust, key);
     }
 
     @Override
-    protected HttpClientBuilder getConfiguration(final Proxy proxy, final LoginCallback prompt) throws ConnectionCanceledException {
+    protected DAVClient connect(final ProxyFinder proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
+        final DAVClient client = super.connect(proxy, key, prompt, cancel);
+        try {
+            final TusCapabilitiesRequest request = new TusCapabilitiesRequest(host, new OwncloudHomeFeature(host).find(OwncloudHomeFeature.Context.tus));
+            log.debug("Query Tus capabilities at {}", request);
+            client.execute(request, new TusCapabilitiesResponseHandler(tus));
+        }
+        catch(HttpResponseException e) {
+            throw new DefaultHttpResponseExceptionMappingService().map(e);
+        }
+        catch(IOException e) {
+            throw new DefaultIOExceptionMappingService().map(e);
+        }
+        return client;
+    }
+
+    @Override
+    protected HttpClientBuilder getConfiguration(final ProxyFinder proxy, final LoginCallback prompt) throws ConnectionCanceledException {
         final HttpClientBuilder configuration = super.getConfiguration(proxy, prompt);
         if(host.getProtocol().isOAuthConfigurable()) {
             authorizationService = new OAuth2RequestInterceptor(configuration.build(), host, prompt)
@@ -91,26 +127,37 @@ public class OwncloudSession extends DAVSession {
     }
 
     @Override
-    public void login(final Proxy proxy, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
+    public void login(final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
         if(host.getProtocol().isOAuthConfigurable()) {
             final Credentials credentials = authorizationService.validate();
             final OAuthTokens oauth = credentials.getOauth();
             try {
-                final String email = JWT.decode(oauth.getIdToken()).getClaim("email").asString();
-                credentials.setUsername(email);
+                final String username = JWT.decode(oauth.getIdToken()).getClaim("preferred_username").asString();
+                if(StringUtils.isNotBlank(username)) {
+                    credentials.setUsername(username);
+                }
             }
             catch(JWTDecodeException e) {
-                log.warn(String.format("Failure %s decoding JWT %s", e, oauth.getIdToken()));
+                log.warn("Failure {} decoding JWT {}", e, oauth.getIdToken());
             }
         }
-        super.login(proxy, prompt, cancel);
+        super.login(prompt, cancel);
+        try {
+            client.execute(new OcsCapabilitiesRequest(host), new OcsCapabilitiesResponseHandler(ocs));
+        }
+        catch(HttpResponseException e) {
+            throw new DefaultHttpResponseExceptionMappingService().map(e);
+        }
+        catch(IOException e) {
+            throw new DefaultIOExceptionMappingService().map(e);
+        }
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <T> T _getFeature(final Class<T> type) {
         if(type == Home.class) {
-            return (T) new DelegatingHomeFeature(new WorkdirHomeFeature(host), new DefaultPathHomeFeature(host), new NextcloudHomeFeature(host));
+            return (T) new DelegatingHomeFeature(new WorkdirHomeFeature(host), new OwncloudHomeFeature(host));
         }
         if(type == ListService.class) {
             return (T) new NextcloudListService(this);
@@ -119,17 +166,23 @@ public class OwncloudSession extends DAVSession {
             return (T) new DAVDirectoryFeature(this, new OwncloudAttributesFinderFeature(this));
         }
         if(type == Touch.class) {
-            return (T) new DAVTouchFeature(new NextcloudWriteFeature(this), new OwncloudAttributesFinderFeature(this));
+            return (T) new DAVTouchFeature(new NextcloudWriteFeature(this));
         }
         if(type == AttributesFinder.class) {
             return (T) new OwncloudAttributesFinderFeature(this);
         }
         if(type == Lock.class) {
-            // https://github.com/nextcloud/server/issues/1308
-            return null;
+            if(!ocs.locking) {
+                return null;
+            }
         }
         if(type == Upload.class) {
-            return (T) new HttpUploadFeature(new NextcloudWriteFeature(this));
+            if(ArrayUtils.contains(tus.versions, TUS_VERSION) && tus.extensions.contains(TusCapabilities.Extension.creation)) {
+                return (T) new OcisUploadFeature(host, client.getClient(), new TusWriteFeature(tus, client.getClient()), tus);
+            }
+            else {
+                return (T) new HttpUploadFeature(new NextcloudWriteFeature(this));
+            }
         }
         if(type == Write.class) {
             return (T) new NextcloudWriteFeature(this);
@@ -141,6 +194,9 @@ public class OwncloudSession extends DAVSession {
             return (T) new NextcloudShareFeature(this);
         }
         if(type == Versioning.class) {
+            if(!ocs.versioning) {
+                return null;
+            }
             return (T) new OwncloudVersioningFeature(this);
         }
         if(type == Delete.class) {

@@ -75,7 +75,7 @@ public class SDSMultipartWriteFeature implements MultipartWrite<Node> {
             public void close() throws IOException {
                 try {
                     if(close.get()) {
-                        log.warn(String.format("Skip double close of stream %s", this));
+                        log.warn("Skip double close of stream {}", this);
                         return;
                     }
                     super.close();
@@ -97,16 +97,11 @@ public class SDSMultipartWriteFeature implements MultipartWrite<Node> {
                     upload.cancel(file, uploadToken);
                 }
                 catch(BackgroundException f) {
-                    log.warn(String.format("Failure %s cancelling upload for file %s with upload token %s after failure %s", f, file, uploadToken, e));
+                    log.warn("Failure {} cancelling upload for file {} with upload token {} after failure {}", f, file, uploadToken, e);
                 }
                 throw e;
             }
         };
-    }
-
-    @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        return new Append(false).withStatus(status);
     }
 
     @Override

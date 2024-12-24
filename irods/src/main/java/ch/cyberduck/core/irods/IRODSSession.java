@@ -40,7 +40,7 @@ import ch.cyberduck.core.features.Touch;
 import ch.cyberduck.core.features.Write;
 import ch.cyberduck.core.preferences.HostPreferences;
 import ch.cyberduck.core.preferences.PreferencesReader;
-import ch.cyberduck.core.proxy.Proxy;
+import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.shared.DefaultPathHomeFeature;
 import ch.cyberduck.core.shared.DelegatingHomeFeature;
 import ch.cyberduck.core.shared.WorkdirHomeFeature;
@@ -79,7 +79,7 @@ public class IRODSSession extends SSLSession<IRODSFileSystemAO> {
     }
 
     @Override
-    protected IRODSFileSystemAO connect(final Proxy proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
+    protected IRODSFileSystemAO connect(final ProxyFinder proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
         try {
             final IRODSFileSystem fs = this.configure(IRODSFileSystem.instance());
             final IRODSAccessObjectFactory factory = fs.getIRODSAccessObjectFactory();
@@ -108,9 +108,7 @@ public class IRODSSession extends SSLSession<IRODSFileSystemAO> {
         properties.setIrodsParallelSocketTimeout(timeout);
         properties.setGetBufferSize(preferences.getInteger("connection.chunksize"));
         properties.setPutBufferSize(preferences.getInteger("connection.chunksize"));
-        if(log.isDebugEnabled()) {
-            log.debug(String.format("Configure client %s with properties %s", client, properties));
-        }
+        log.debug("Configure client {} with properties {}", client, properties);
         client.getIrodsSession().setJargonProperties(properties);
         client.getIrodsSession().setX509TrustManager(trust);
         return client;
@@ -131,16 +129,14 @@ public class IRODSSession extends SSLSession<IRODSFileSystemAO> {
     }
 
     @Override
-    public void login(final Proxy proxy, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
+    public void login(final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
         try {
             final IRODSAccount account = client.getIRODSAccount();
             final Credentials credentials = host.getCredentials();
             account.setUserName(credentials.getUsername());
             account.setPassword(credentials.getPassword());
             final AuthResponse response = client.getIRODSAccessObjectFactory().authenticateIRODSAccount(account);
-            if(log.isDebugEnabled()) {
-                log.debug(String.format("Connected to %s", response.getStartupResponse()));
-            }
+            log.debug("Connected to {}", response.getStartupResponse());
             if(!response.isSuccessful()) {
                 throw new LoginFailureException(MessageFormat.format(LocaleFactory.localizedString(
                     "Login {0} with username and password", "Credentials"), BookmarkNameProvider.toString(host)));

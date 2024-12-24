@@ -18,7 +18,7 @@
     <parent>
         <groupId>ch.cyberduck</groupId>
         <artifactId>parent</artifactId>
-        <version>8.8.1</version>
+        <version>9.1.2-SNAPSHOT</version>
     </parent>
     <artifactId>owncloud</artifactId>
     <packaging>jar</packaging>
@@ -27,6 +27,11 @@
         <dependency>
             <groupId>ch.cyberduck</groupId>
             <artifactId>core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.cyberduck</groupId>
+            <artifactId>tus</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -58,6 +63,12 @@
             <type>pom</type>
             <scope>test</scope>
             <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.cyberduck</groupId>
+            <artifactId>cryptomator</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

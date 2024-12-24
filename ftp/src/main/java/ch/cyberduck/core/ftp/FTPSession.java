@@ -31,26 +31,13 @@ import ch.cyberduck.core.cdn.DistributionConfiguration;
 import ch.cyberduck.core.cloudfront.CustomOriginCloudFrontDistributionConfiguration;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.LoginCanceledException;
-import ch.cyberduck.core.features.AttributesFinder;
-import ch.cyberduck.core.features.Command;
-import ch.cyberduck.core.features.Copy;
-import ch.cyberduck.core.features.Delete;
-import ch.cyberduck.core.features.Directory;
-import ch.cyberduck.core.features.Find;
-import ch.cyberduck.core.features.Home;
-import ch.cyberduck.core.features.Move;
-import ch.cyberduck.core.features.Read;
-import ch.cyberduck.core.features.Symlink;
-import ch.cyberduck.core.features.Timestamp;
-import ch.cyberduck.core.features.Touch;
-import ch.cyberduck.core.features.UnixPermission;
-import ch.cyberduck.core.features.Write;
+import ch.cyberduck.core.features.*;
 import ch.cyberduck.core.ftp.list.FTPListService;
 import ch.cyberduck.core.idna.PunycodeConverter;
 import ch.cyberduck.core.preferences.HostPreferences;
 import ch.cyberduck.core.preferences.PreferencesFactory;
 import ch.cyberduck.core.preferences.PreferencesReader;
-import ch.cyberduck.core.proxy.Proxy;
+import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.proxy.ProxySocketFactory;
 import ch.cyberduck.core.shared.DefaultCopyFeature;
 import ch.cyberduck.core.shared.DelegatingHomeFeature;
@@ -84,6 +71,7 @@ public class FTPSession extends SSLSession<FTPClient> {
     private final PreferencesReader preferences
             = new HostPreferences(host);
 
+    private Read read;
     private Timestamp timestamp;
     private UnixPermission permission;
     private Symlink symlink;
@@ -122,22 +110,9 @@ public class FTPSession extends SSLSession<FTPClient> {
             client.disconnect();
         }
         catch(IOException e) {
-            log.warn(String.format("Ignore disconnect failure %s", e.getMessage()));
+            log.warn("Ignore disconnect failure {}", e.getMessage());
         }
         super.disconnect();
-    }
-
-    @Override
-    public void interrupt() throws BackgroundException {
-        if(host.getProtocol().isSecure()) {
-            // The client and the server must share knowledge that the connection is ending in order to avoid a truncation attack.
-            // Either party may initiate the exchange of closing messages.
-            log.warn(String.format("Skip disconnect for %s connection to workaround hang in closing socket", host.getProtocol()));
-            super.disconnect();
-        }
-        else {
-            super.interrupt();
-        }
     }
 
     protected void configure(final FTPClient client) throws IOException {
@@ -174,7 +149,7 @@ public class FTPSession extends SSLSession<FTPClient> {
     }
 
     @Override
-    protected FTPClient connect(final Proxy proxy, final HostKeyCallback callback, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
+    protected FTPClient connect(final ProxyFinder proxy, final HostKeyCallback callback, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
         try {
             final CustomTrustSSLProtocolSocketFactory f
                     = new CustomTrustSSLProtocolSocketFactory(trust, key, preferences.getProperty("connection.ssl.protocols.ftp").split(","));
@@ -256,7 +231,7 @@ public class FTPSession extends SSLSession<FTPClient> {
     }
 
     @Override
-    public void login(final Proxy proxy, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
+    public void login(final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
         try {
             if(client.login(host.getCredentials().getUsername(), host.getCredentials().getPassword())) {
                 if(host.getProtocol().isSecure()) {
@@ -267,7 +242,7 @@ public class FTPSession extends SSLSession<FTPClient> {
                 if(StandardCharsets.UTF_8.name().equals(host.getEncoding())) {
                     if(client.hasFeature("UTF8")) {
                         if(!FTPReply.isPositiveCompletion(client.sendCommand("OPTS UTF8 ON"))) {
-                            log.warn(String.format("Failed to negotiate UTF-8 charset %s", client.getReplyString()));
+                            log.warn("Failed to negotiate UTF-8 charset {}", client.getReplyString());
                         }
                     }
                 }
@@ -278,9 +253,7 @@ public class FTPSession extends SSLSession<FTPClient> {
                 else {
                     zone = host.getTimezone();
                 }
-                if(log.isInfoEnabled()) {
-                    log.info(String.format("Reset parser to timezone %s", zone));
-                }
+                log.info("Reset parser to timezone {}", zone);
                 String system = StringUtils.EMPTY; //Unknown
                 try {
                     system = client.getSystemType();
@@ -289,8 +262,9 @@ public class FTPSession extends SSLSession<FTPClient> {
                     }
                 }
                 catch(IOException e) {
-                    log.warn(String.format("SYST command failed %s", e.getMessage()));
+                    log.warn("SYST command failed {}", e.getMessage());
                 }
+                read = new FTPReadFeature(this, client.hasFeature("REST", "STREAM"));
                 listService = new FTPListService(this, system, zone);
                 if(client.hasFeature(FTPCmd.MFMT.getCommand())) {
                     timestamp = new FTPMFMTTimestampFeature(this);
@@ -330,7 +304,10 @@ public class FTPSession extends SSLSession<FTPClient> {
             return (T) new FTPDeleteFeature(this);
         }
         if(type == Read.class) {
-            return (T) new FTPReadFeature(this);
+            return (T) read;
+        }
+        if(type == Upload.class) {
+            return (T) new FTPUploadFeature(this);
         }
         if(type == Write.class) {
             return (T) new FTPWriteFeature(this);

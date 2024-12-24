@@ -18,9 +18,7 @@ package ch.cyberduck.core.sds;
 import ch.cyberduck.core.Credentials;
 import ch.cyberduck.core.PasswordCallback;
 import ch.cyberduck.core.Path;
-import ch.cyberduck.core.Session;
 import ch.cyberduck.core.exception.BackgroundException;
-import ch.cyberduck.core.features.VersionIdProvider;
 import ch.cyberduck.core.preferences.HostPreferences;
 import ch.cyberduck.core.preferences.PreferencesFactory;
 import ch.cyberduck.core.sds.io.swagger.client.ApiException;
@@ -35,8 +33,7 @@ import ch.cyberduck.core.sds.io.swagger.client.model.UserKeyPairContainer;
 import ch.cyberduck.core.sds.io.swagger.client.model.UserUserPublicKey;
 import ch.cyberduck.core.sds.triplecrypt.TripleCryptConverter;
 import ch.cyberduck.core.sds.triplecrypt.TripleCryptExceptionMappingService;
-import ch.cyberduck.core.sds.triplecrypt.TripleCryptKeyPair;
-import ch.cyberduck.core.shared.AbstractSchedulerFeature;
+import ch.cyberduck.core.shared.ThreadPoolSchedulerFeature;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
@@ -44,7 +41,6 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -61,25 +57,34 @@ import com.dracoon.sdk.crypto.model.UserPrivateKey;
 
 import static java.util.stream.Collectors.groupingBy;
 
-public class SDSMissingFileKeysSchedulerFeature extends AbstractSchedulerFeature<List<UserFileKeySetRequest>> {
+public class SDSMissingFileKeysSchedulerFeature extends ThreadPoolSchedulerFeature<List<UserFileKeySetRequest>> {
     private static final Logger log = LogManager.getLogger(SDSMissingFileKeysSchedulerFeature.class);
 
-    public SDSMissingFileKeysSchedulerFeature() {
-        this(PreferencesFactory.get().getLong("sds.encryption.missingkeys.scheduler.period"));
+    private final SDSSession session;
+    private final SDSNodeIdProvider nodeid;
+    private final Path file;
+
+    public SDSMissingFileKeysSchedulerFeature(final SDSSession session, final SDSNodeIdProvider nodeid) {
+        this(session, nodeid, null);
     }
 
-    public SDSMissingFileKeysSchedulerFeature(final long period) {
+    public SDSMissingFileKeysSchedulerFeature(final SDSSession session, final SDSNodeIdProvider nodeid, final Path file) {
+        this(session, nodeid, file, PreferencesFactory.get().getLong("sds.encryption.missingkeys.scheduler.period"));
+    }
+
+    public SDSMissingFileKeysSchedulerFeature(final SDSSession session, final SDSNodeIdProvider nodeid, final Path file, final long period) {
         super(period);
+        this.file = file;
+        this.session = session;
+        this.nodeid = nodeid;
     }
 
     @Override
-    public List<UserFileKeySetRequest> operate(final Session<?> client, final PasswordCallback callback, final Path file) throws BackgroundException {
-        final SDSSession session = (SDSSession) client;
-        final SDSNodeIdProvider nodeid = (SDSNodeIdProvider) session._getFeature(VersionIdProvider.class);
+    protected List<UserFileKeySetRequest> operate(final PasswordCallback callback) throws BackgroundException {
         try {
             final UserAccountWrapper account = session.userAccount();
             if(!account.isEncryptionEnabled()) {
-                log.warn(String.format("No key pair found in user account %s", account));
+                log.warn("No key pair found in user account {}", account);
                 return Collections.emptyList();
             }
             final List<UserFileKeySetRequest> processed = new ArrayList<>();
@@ -87,24 +92,17 @@ public class SDSMissingFileKeysSchedulerFeature extends AbstractSchedulerFeature
             final Long fileId = file != null ? Long.parseLong(nodeid.getVersionId(file)) : null;
             UserFileKeySetBatchRequest request;
             do {
-                if(log.isDebugEnabled()) {
-                    log.debug(String.format("Request a list of missing file keys for file %s", file));
-                }
+                log.debug("Request a list of missing file keys limited to {}", fileId);
                 request = new UserFileKeySetBatchRequest();
                 final MissingKeysResponse missingKeys = new NodesApi(session.getClient()).requestMissingFileKeys(
                         null, null, null, fileId, null, null, null);
                 final Map<Long, List<UserUserPublicKey>> userPublicKeys = missingKeys.getUsers().stream().collect(groupingBy(UserUserPublicKey::getId));
                 final Map<Long, List<FileFileKeys>> files = missingKeys.getFiles().stream().collect(groupingBy(FileFileKeys::getId));
                 for(UserIdFileIdItem item : missingKeys.getItems()) {
-                    final HashMap<UserKeyPairContainer, Credentials> passphrases = new HashMap<>();
                     for(FileFileKeys fileKey : files.get(item.getFileId())) {
                         final EncryptedFileKey encryptedFileKey = TripleCryptConverter.toCryptoEncryptedFileKey(fileKey.getFileKeyContainer());
                         final UserKeyPairContainer keyPairForDecryption = session.getKeyPairForFileKey(encryptedFileKey.getVersion());
-                        if(!passphrases.containsKey(keyPairForDecryption)) {
-                            passphrases.put(keyPairForDecryption,
-                                    new TripleCryptKeyPair().unlock(callback, session.getHost(), TripleCryptConverter.toCryptoUserKeyPair(keyPairForDecryption)));
-                        }
-                        final Credentials passphrase = passphrases.get(keyPairForDecryption);
+                        final Credentials passphrase = session.unlockTripleCryptKeyPair(callback, TripleCryptConverter.toCryptoUserKeyPair(keyPairForDecryption));
                         for(UserUserPublicKey userPublicKey : userPublicKeys.get(item.getUserId())) {
                             final EncryptedFileKey fk = this.encryptFileKey(
                                     TripleCryptConverter.toCryptoUserPrivateKey(keyPairForDecryption.getPrivateKeyContainer()),
@@ -113,17 +111,13 @@ public class SDSMissingFileKeysSchedulerFeature extends AbstractSchedulerFeature
                                     .fileId(item.getFileId())
                                     .userId(item.getUserId())
                                     .fileKey(TripleCryptConverter.toSwaggerFileKey(fk));
-                            if(log.isDebugEnabled()) {
-                                log.debug(String.format("Missing file key processed for file %d and user %d", item.getFileId(), item.getUserId()));
-                            }
+                            log.debug("Missing file key processed for file {} and user {}", item.getFileId(), item.getUserId());
                             request.addItemsItem(keySetRequest);
                         }
                     }
                 }
                 if(!request.getItems().isEmpty()) {
-                    if(log.isDebugEnabled()) {
-                        log.debug(String.format("Set file keys with %s", request));
-                    }
+                    log.debug("Set file keys with {}", request);
                     new NodesApi(session.getClient()).setUserFileKeys(request, StringUtils.EMPTY);
                     processed.addAll(request.getItems());
                 }
@@ -158,7 +152,7 @@ public class SDSMissingFileKeysSchedulerFeature extends AbstractSchedulerFeature
                                             final UserUserPublicKey pubkey, final FileFileKeys fileKeys)
             throws InvalidFileKeyException, InvalidKeyPairException, InvalidPasswordException, CryptoSystemException, UnknownVersionException {
         final PlainFileKey plainFileKey = Crypto.decryptFileKey(
-                TripleCryptConverter.toCryptoEncryptedFileKey(fileKeys.getFileKeyContainer()), privateKey, passphrase.getPassword());
+                TripleCryptConverter.toCryptoEncryptedFileKey(fileKeys.getFileKeyContainer()), privateKey, passphrase.getPassword().toCharArray());
         return Crypto.encryptFileKey(
                 plainFileKey, TripleCryptConverter.toCryptoUserPublicKey(pubkey.getPublicKeyContainer()));
     }

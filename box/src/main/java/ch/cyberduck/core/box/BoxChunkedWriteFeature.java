@@ -41,6 +41,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
+import java.util.EnumSet;
 
 public class BoxChunkedWriteFeature extends AbstractHttpWriteFeature<File> {
     private static final Logger log = LogManager.getLogger(BoxChunkedWriteFeature.class);
@@ -66,9 +67,7 @@ public class BoxChunkedWriteFeature extends AbstractHttpWriteFeature<File> {
                             .withOffset(status.getOffset()));
                     final String uploadSessionId = status.getParameters().get(BoxLargeUploadService.UPLOAD_SESSION_ID);
                     final String overall_length = status.getParameters().get(BoxLargeUploadService.OVERALL_LENGTH);
-                    if(log.isDebugEnabled()) {
-                        log.debug(String.format("Send range %s for file %s", range, file));
-                    }
+                    log.debug("Send range {} for file {}", range, file);
                     final HttpPut request = new HttpPut(String.format("%s/files/upload_sessions/%s", client.getBasePath(), uploadSessionId));
                     // Must not overlap with the range of a part already uploaded this session.
                     request.addHeader(new BasicHeader(HttpHeaders.CONTENT_RANGE, String.format("bytes %d-%d/%d", range.getStart(), range.getEnd(),
@@ -81,13 +80,11 @@ public class BoxChunkedWriteFeature extends AbstractHttpWriteFeature<File> {
                             return new JSON().getContext(null).readValue(entity1.getContent(), UploadedPart.class);
                         }
                     }).getPart();
-                    if(log.isDebugEnabled()) {
-                        log.debug(String.format("Received response %s for upload of %s", response, file));
-                    }
+                    log.debug("Received response {} for upload of {}", response, file);
                     return new File().size(response.getSize()).sha1(response.getSha1()).id(response.getPartId());
                 }
                 catch(HttpResponseException e) {
-                    throw new DefaultHttpResponseExceptionMappingService().map(e);
+                    throw new DefaultHttpResponseExceptionMappingService().map("Upload {0} failed", e, file);
                 }
                 catch(IOException e) {
                     throw new DefaultIOExceptionMappingService().map("Upload {0} failed", e, file);
@@ -108,7 +105,7 @@ public class BoxChunkedWriteFeature extends AbstractHttpWriteFeature<File> {
     }
 
     @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        return new Append(false).withStatus(status);
+    public EnumSet<Flags> features(final Path file) {
+        return EnumSet.of(Flags.checksum);
     }
 }

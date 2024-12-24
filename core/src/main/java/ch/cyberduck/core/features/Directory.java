@@ -57,14 +57,17 @@ public interface Directory<Reply> {
     /**
      * Retrieve write implementation for implementations using placeholder files for folders
      */
-    Directory<Reply> withWriter(Write<Reply> writer);
+    default Directory<Reply> withWriter(Write<Reply> writer) {
+        return this;
+    }
 
     /**
      * @throws AccessDeniedException Permission failure for target directory
      */
     default void preflight(final Path workdir, final String filename) throws BackgroundException {
         if(!workdir.attributes().getPermission().isWritable()) {
-            throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Upload {0} failed", "Error"), filename));
+            throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString(
+                    "Cannot create folder {0}", "Error"), filename)).withFile(workdir);
         }
     }
 }

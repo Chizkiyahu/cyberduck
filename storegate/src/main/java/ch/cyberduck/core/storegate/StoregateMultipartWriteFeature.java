@@ -49,6 +49,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -64,8 +65,8 @@ public class StoregateMultipartWriteFeature implements MultipartWrite<File> {
     }
 
     @Override
-    public Append append(final Path file, final TransferStatus status) throws BackgroundException {
-        return new Append(false).withStatus(status);
+    public EnumSet<Flags> features(final Path file) {
+        return EnumSet.of(Flags.timestamp);
     }
 
     @Override
@@ -185,17 +186,18 @@ public class StoregateMultipartWriteFeature implements MultipartWrite<File> {
         public void close() throws IOException {
             try {
                 if(close.get()) {
-                    log.warn(String.format("Skip double close of stream %s", this));
+                    log.warn("Skip double close of stream {}", this);
                     return;
                 }
                 if(null != canceled.get()) {
-                    log.warn(String.format("Skip closing with previous failure %s", canceled.get()));
+                    log.warn("Skip closing with previous failure {}", canceled.get().toString());
                     return;
                 }
-                if(overall.getLength() <= 0) {
+                if(TransferStatus.UNKNOWN_LENGTH == overall.getLength() || 0L == overall.getLength()) {
                     final StoregateApiClient client = session.getClient();
                     final HttpPut put = new HttpPut(location);
-                    put.addHeader(HttpHeaders.CONTENT_RANGE, "bytes */0");
+                    // Use Content-Length = 0 and Content-Range = */Length to query upload status.
+                    put.addHeader(HttpHeaders.CONTENT_RANGE, String.format("bytes */%d", 0));
                     final HttpResponse response = client.getClient().execute(put);
                     try {
                         switch(response.getStatusLine().getStatusCode()) {

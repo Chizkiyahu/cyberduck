@@ -24,11 +24,7 @@ import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.features.Vault;
 import ch.cyberduck.core.vault.DecryptingListProgressListener;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 public class CryptoListService implements ListService {
-    private static final Logger log = LogManager.getLogger(CryptoListService.class);
 
     private final Session<?> session;
     private final ListService delegate;
@@ -43,6 +39,11 @@ public class CryptoListService implements ListService {
     @Override
     public AttributedList<Path> list(final Path directory, final ListProgressListener listener) throws BackgroundException {
         return delegate.list(vault.encrypt(session, directory), new DecryptingListProgressListener(session, vault, listener));
+    }
+
+    @Override
+    public void preflight(final Path directory) throws BackgroundException {
+        delegate.preflight(vault.encrypt(session, directory));
     }
 
     @Override
