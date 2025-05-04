@@ -174,11 +174,22 @@ public class KeychainLoginService implements LoginService {
         catch(LoginFailureException e) {
             log.debug("Login failed for {}", session);
             listener.message(LocaleFactory.localizedString("Login failed", "Credentials"));
-            credentials.setPassed(false);
             final LoginOptions options = new LoginOptions(bookmark.getProtocol());
-            if(this.prompt(bookmark, e.getDetail(), prompt, options)) {
-                // Retry
-                return false;
+            try {
+                if(this.prompt(bookmark, e.getDetail(), prompt, options)) {
+                    // Retry
+                    return false;
+                }
+            }
+            catch(LoginCanceledException c) {
+                // Canceled by user
+                try {
+                    c.initCause(e);
+                }
+                catch(IllegalArgumentException | IllegalStateException r) {
+                    log.warn("Ignore error {} initializing faiulre {} with cause {}", r, e, c);
+                }
+                throw c;
             }
             log.debug("Reset credentials for {}", bookmark);
             // No updated credentials. Nullify input
@@ -204,8 +215,6 @@ public class KeychainLoginService implements LoginService {
         else {
             log.info("Skip writing credentials for bookmark {}", bookmark.getHostname());
         }
-        // Flag for successful authentication
-        credentials.setPassed(true);
         // Nullify password and tokens
         log.debug("Reset credentials for {}", bookmark);
         switch(bookmark.getProtocol().getStatefulness()) {

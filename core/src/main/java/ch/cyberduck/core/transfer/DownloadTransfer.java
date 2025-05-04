@@ -24,15 +24,13 @@ import ch.cyberduck.core.exception.TransferCanceledException;
 import ch.cyberduck.core.features.AttributesFinder;
 import ch.cyberduck.core.features.Bulk;
 import ch.cyberduck.core.features.Download;
-import ch.cyberduck.core.filter.DownloadDuplicateFilter;
-import ch.cyberduck.core.filter.DownloadRegexFilter;
+import ch.cyberduck.core.filter.DownloadFilter;
 import ch.cyberduck.core.io.BandwidthThrottle;
 import ch.cyberduck.core.io.StreamListener;
 import ch.cyberduck.core.local.DefaultLocalDirectoryFeature;
 import ch.cyberduck.core.local.LocalSymlinkFactory;
 import ch.cyberduck.core.local.features.Symlink;
 import ch.cyberduck.core.preferences.PreferencesFactory;
-import ch.cyberduck.core.shared.DefaultAttributesFinderFeature;
 import ch.cyberduck.core.transfer.download.AbstractDownloadFilter;
 import ch.cyberduck.core.transfer.download.CompareFilter;
 import ch.cyberduck.core.transfer.download.DownloadFilterOptions;
@@ -70,8 +68,7 @@ public class DownloadTransfer extends Transfer {
     private DownloadFilterOptions options = new DownloadFilterOptions(host);
 
     public DownloadTransfer(final Host host, final Path root, final Local local) {
-        this(host, Collections.singletonList(new TransferItem(root, local)),
-                PreferencesFactory.get().getBoolean("queue.download.skip.enable") ? new DownloadRegexFilter() : new DownloadDuplicateFilter());
+        this(host, Collections.singletonList(new TransferItem(root, local)), new DownloadFilter());
     }
 
     public DownloadTransfer(final Host host, final Path root, final Local local, final Filter<Path> f) {
@@ -79,8 +76,7 @@ public class DownloadTransfer extends Transfer {
     }
 
     public DownloadTransfer(final Host host, final List<TransferItem> roots) {
-        this(host, roots,
-                PreferencesFactory.get().getBoolean("queue.download.skip.enable") ? new DownloadRegexFilter() : new DownloadDuplicateFilter());
+        this(host, roots, new DownloadFilter());
     }
 
     public DownloadTransfer(final Host host, final List<TransferItem> roots, final Filter<Path> f) {
@@ -143,7 +139,7 @@ public class DownloadTransfer extends Transfer {
         final DownloadSymlinkResolver resolver = new DownloadSymlinkResolver(roots);
         final AttributesFinder attributes;
         if(roots.size() > 1 || roots.stream().filter(item -> item.remote.isDirectory()).findAny().isPresent()) {
-            attributes = new CachingAttributesFinderFeature(source, cache, source.getFeature(AttributesFinder.class, new DefaultAttributesFinderFeature(source)));
+            attributes = new CachingAttributesFinderFeature(source, cache);
         }
         else {
             attributes = new CachingAttributesFinderFeature(source, cache, source.getFeature(AttributesFinder.class));
@@ -237,7 +233,7 @@ public class DownloadTransfer extends Transfer {
                     filter.complete(
                             status.getRename().remote != null ? status.getRename().remote : entry.getKey().remote,
                             status.getRename().local != null ? status.getRename().local : entry.getKey().local,
-                            status.complete(), progress);
+                            status.setComplete(), progress);
                 }
                 catch(AccessDeniedException e) {
                     if(error.prompt(entry.getKey(), status, e, files.size())) {

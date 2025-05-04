@@ -57,25 +57,32 @@ public class RemoteProfilesFinder implements ProfilesFinder {
     private final ProtocolFactory protocols;
     private final Session<?> session;
     private final TransferPathFilter comparison;
+    private final Filter<Path> filter;
 
     public RemoteProfilesFinder(final Session<?> session) {
         this(ProtocolFactory.get(), session);
     }
 
     public RemoteProfilesFinder(final ProtocolFactory protocols, final Session<?> session) {
-        this(protocols, session, new CompareFilter(new DisabledDownloadSymlinkResolver(), session));
+        this(protocols, session, new CompareFilter(new DisabledDownloadSymlinkResolver(), session), new ProfileFilter());
     }
 
-    public RemoteProfilesFinder(final ProtocolFactory protocols, final Session<?> session, final TransferPathFilter comparison) {
+    public RemoteProfilesFinder(final Session<?> session,
+                                final TransferPathFilter comparison, final Filter<Path> filter) {
+        this(ProtocolFactory.get(), session, comparison, filter);
+    }
+
+    public RemoteProfilesFinder(final ProtocolFactory protocols, final Session<?> session,
+                                final TransferPathFilter comparison, final Filter<Path> filter) {
         this.protocols = protocols;
         this.session = session;
         this.comparison = comparison;
+        this.filter = filter;
     }
 
     @Override
     public Set<ProfileDescription> find(final Visitor visitor) throws BackgroundException {
         log.info("Fetch profiles from {}", session.getHost());
-        final ProfileFilter filter = new ProfileFilter();
         final AttributedList<Path> list = session.getFeature(ListService.class).list(new DelegatingHomeFeature(
                 new DefaultPathHomeFeature(session.getHost())).find(), new DisabledListProgressListener());
         return list.filter(filter).toStream().map(file -> visitor.visit(new RemoteProfileDescription(protocols, file,
@@ -84,13 +91,13 @@ public class RemoteProfilesFinder implements ProfilesFinder {
                     protected Local initialize() throws ConcurrentException {
                         try {
                             final Local local = temp.create("profiles", file);
-                            if(comparison.accept(file, local, new TransferStatus().exists(true), new DisabledProgressListener())) {
+                            if(comparison.accept(file, local, new TransferStatus().setExists(true), new DisabledProgressListener())) {
                                 final Read read = session.getFeature(Read.class);
                                 log.info("Download profile {}", file);
                                 // Read latest version
                                 try (InputStream in = read.read(file.withAttributes(new PathAttributes(file.attributes())
                                         // Read latest version
-                                        .withVersionId(null)), new TransferStatus().withLength(TransferStatus.UNKNOWN_LENGTH), new DisabledConnectionCallback()); OutputStream out = local.getOutputStream(false)) {
+                                        .setVersionId(null)), new TransferStatus().setLength(TransferStatus.UNKNOWN_LENGTH), new DisabledConnectionCallback()); OutputStream out = local.getOutputStream(false)) {
                                     IOUtils.copy(in, out);
                                 }
                             }

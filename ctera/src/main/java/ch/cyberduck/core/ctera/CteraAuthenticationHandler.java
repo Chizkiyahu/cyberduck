@@ -42,7 +42,7 @@ import ch.cyberduck.core.http.HttpExceptionMappingService;
 import ch.cyberduck.core.local.Application;
 import ch.cyberduck.core.local.BrowserLauncherFactory;
 import ch.cyberduck.core.oauth.OAuth2TokenListenerRegistry;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.preferences.PreferencesFactory;
 import ch.cyberduck.core.urlhandler.SchemeHandler;
 import ch.cyberduck.core.urlhandler.SchemeHandlerFactory;
@@ -153,7 +153,9 @@ public class CteraAuthenticationHandler implements ServiceUnavailableRetryStrate
     public CteraTokens save(final CteraTokens tokens) throws LocalAccessDeniedException {
         log.debug("Save new tokens {} for {}", tokens, host);
         final Credentials credentials = host.getCredentials();
-        credentials.withToken(String.format("%s:%s", tokens.getDeviceId(), tokens.getSharedSecret()))
+        credentials
+                .withToken(String.format("%s:%s", tokens.getDeviceId(), tokens.getSharedSecret()))
+                .withPassword(password)
                 .withSaved(new LoginOptions().save);
         if(credentials.isSaved()) {
             store.save(host);
@@ -227,7 +229,7 @@ public class CteraAuthenticationHandler implements ServiceUnavailableRetryStrate
      * @return Activation code
      */
     private String startWebSSOFlow() throws BackgroundException {
-        if(new HostPreferences(session.getHost()).getBoolean("oauth.browser.open.warn")) {
+        if(HostPreferencesFactory.get(session.getHost()).getBoolean("oauth.browser.open.warn")) {
             prompt.warn(session.getHost(),
                     LocaleFactory.localizedString("Provide additional login credentials", "Credentials"),
                     new StringAppender()
@@ -272,7 +274,7 @@ public class CteraAuthenticationHandler implements ServiceUnavailableRetryStrate
         try {
             request.setEntity(
                     new StringEntity(
-                            getAttachmentAsString(activationCode, new HostPreferences(session.getHost()).getProperty("ctera.attach.devicetype"), null,
+                            getAttachmentAsString(activationCode, HostPreferencesFactory.get(session.getHost()).getProperty("ctera.attach.devicetype"), null,
                                     URIEncoder.encode(InetAddress.getLocalHost().getHostName()), new MacUniqueIdService().getUUID()),
                             ContentType.create("application/xml", StandardCharsets.UTF_8.name()
                             )
@@ -293,7 +295,7 @@ public class CteraAuthenticationHandler implements ServiceUnavailableRetryStrate
         try {
             request.setEntity(
                     new StringEntity(
-                            getAttachmentAsString(null, new HostPreferences(session.getHost()).getProperty("ctera.attach.devicetype"), password,
+                            getAttachmentAsString(null, HostPreferencesFactory.get(session.getHost()).getProperty("ctera.attach.devicetype"), password,
                                     URIEncoder.encode(InetAddress.getLocalHost().getHostName()), new MacUniqueIdService().getUUID()),
                             ContentType.create("application/xml", StandardCharsets.UTF_8.name()
                             )

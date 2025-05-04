@@ -31,7 +31,7 @@ import ch.cyberduck.core.http.DelayedHttpEntityCallable;
 import ch.cyberduck.core.http.HttpExceptionMappingService;
 import ch.cyberduck.core.http.HttpRange;
 import ch.cyberduck.core.http.HttpResponseOutputStream;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.transfer.TransferStatus;
 
 import org.apache.http.Header;
@@ -61,7 +61,7 @@ public class DAVWriteFeature extends AbstractHttpWriteFeature<Void> implements W
     private final boolean expect;
 
     public DAVWriteFeature(final DAVSession session) {
-        this(session, new HostPreferences(session.getHost()).getBoolean("webdav.expect-continue"));
+        this(session, HostPreferencesFactory.get(session.getHost()).getBoolean("webdav.expect-continue"));
     }
 
     public DAVWriteFeature(final DAVSession session, final boolean expect) {
@@ -80,7 +80,7 @@ public class DAVWriteFeature extends AbstractHttpWriteFeature<Void> implements W
                 if(null != status.getLockId()) {
                     // Handle 412 Precondition Failed with expired token
                     log.warn("Retry failure {} with lock id {} removed", e, status.getLockId());
-                    return this.write(file, this.toHeaders(file, status.withLockId(null), expect), status);
+                    return this.write(file, this.toHeaders(file, status.setLockId(null), expect), status);
                 }
             }
             throw e;
@@ -89,7 +89,7 @@ public class DAVWriteFeature extends AbstractHttpWriteFeature<Void> implements W
             if(expect) {
                 // Handle 417 Expectation Failed
                 log.warn("Retry failure {} with Expect: Continue removed", e.getMessage());
-                return this.write(file, this.toHeaders(file, status.withLockId(null), false), status);
+                return this.write(file, this.toHeaders(file, status.setLockId(null), false), status);
             }
             throw e;
         }

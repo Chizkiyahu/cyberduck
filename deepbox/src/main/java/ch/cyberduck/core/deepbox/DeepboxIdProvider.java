@@ -15,7 +15,6 @@ package ch.cyberduck.core.deepbox;
  * GNU General Public License for more details.
  */
 
-import ch.cyberduck.core.AbstractPath;
 import ch.cyberduck.core.CachingFileIdProvider;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathAttributes;
@@ -38,7 +37,7 @@ import ch.cyberduck.core.deepcloud.io.swagger.client.model.UserFull;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.NotfoundException;
 import ch.cyberduck.core.features.FileIdProvider;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
@@ -60,10 +59,12 @@ public class DeepboxIdProvider extends CachingFileIdProvider implements FileIdPr
 
     private static final Pattern SHARED = Pattern.compile("(.*)\\s\\((.*)\\)");
 
+    public static final String DEEPBOX_NAME_PROEPRTY_KEY = "deepboxName";
+
     public DeepboxIdProvider(final DeepboxSession session) {
         super(session.getCaseSensitivity());
         this.session = session;
-        this.chunksize = new HostPreferences(session.getHost()).getInteger("deepbox.listing.chunksize");
+        this.chunksize = HostPreferencesFactory.get(session.getHost()).getInteger("deepbox.listing.chunksize");
         this.containerService = new DeepboxPathContainerService(session, this);
     }
 
@@ -119,11 +120,11 @@ public class DeepboxIdProvider extends CachingFileIdProvider implements FileIdPr
                 if(matcher.matches()) {
                     final String companyName = matcher.group(1);
                     final String boxName = matcher.group(2);
-                    final EnumSet<AbstractPath.Type> type = EnumSet.copyOf(segment.getType());
-                    type.add(AbstractPath.Type.shared);
+                    final EnumSet<Path.Type> type = EnumSet.copyOf(segment.getType());
+                    type.add(Path.Type.shared);
                     String deepboxName;
-                    if(combined.attributes().getCustom().containsKey("deepboxName")) {
-                        deepboxName = combined.attributes().getCustom().get("deepboxName");
+                    if(combined.attributes().getCustom().containsKey(DEEPBOX_NAME_PROEPRTY_KEY)) {
+                        deepboxName = combined.attributes().getCustom().get(DEEPBOX_NAME_PROEPRTY_KEY);
                     }
                     else {
                         try {
@@ -134,7 +135,7 @@ public class DeepboxIdProvider extends CachingFileIdProvider implements FileIdPr
                             return file;
                         }
                     }
-                    final Path deepbox = new Path(result, deepboxName, type, new PathAttributes(combined.attributes()).withFileId(null));
+                    final Path deepbox = new Path(result, deepboxName, type, new PathAttributes(combined.attributes()).setFileId(null));
                     result = new Path(deepbox, boxName, type, segment.attributes());
                 }
                 else {
@@ -143,9 +144,9 @@ public class DeepboxIdProvider extends CachingFileIdProvider implements FileIdPr
                 }
             }
             else {
-                final EnumSet<AbstractPath.Type> type = EnumSet.copyOf(segment.getType());
+                final EnumSet<Path.Type> type = EnumSet.copyOf(segment.getType());
                 if(containerService.isInSharedWithMe(segment)) {
-                    type.add(AbstractPath.Type.shared);
+                    type.add(Path.Type.shared);
                 }
                 result = new Path(result, segment.getName(), type, segment.attributes());
             }

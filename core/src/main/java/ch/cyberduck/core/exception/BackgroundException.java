@@ -34,19 +34,25 @@ public class BackgroundException extends Exception {
     private String detail;
 
     public BackgroundException() {
-        this(null, null, null);
+        this.message = null;
+        this.detail = null;
     }
 
     public BackgroundException(final Throwable cause) {
-        this(cause.getMessage(), cause);
+        super(cause);
+        this.message = null;
+        this.detail = cause.getMessage();
     }
 
     public BackgroundException(final String message, final String detail) {
-        this(message, detail, null);
+        this.message = message;
+        this.detail = detail;
     }
 
     public BackgroundException(final String detail, final Throwable cause) {
-        this(null, detail, cause);
+        super(cause);
+        this.message = null;
+        this.detail = detail;
     }
 
     public BackgroundException(final String message, final String detail, final Throwable cause) {
@@ -114,27 +120,16 @@ public class BackgroundException extends Exception {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if(this == o) {
-            return true;
-        }
-        if(!(o instanceof BackgroundException)) {
+    public boolean equals(final Object o) {
+        if(o == null || getClass() != o.getClass()) {
             return false;
         }
         BackgroundException that = (BackgroundException) o;
-        if(this.getCause() != null ? !this.getCause().equals(that.getCause()) : that.getCause() != null) {
-            return false;
-        }
-        if(!Objects.equals(detail, that.detail)) {
-            return false;
-        }
-        return true;
+        return Objects.equals(file, that.file) && Objects.equals(message, that.message) && Objects.equals(detail, that.detail);
     }
 
     @Override
     public int hashCode() {
-        int result = detail != null ? detail.hashCode() : 0;
-        result = 31 * result + (this.getCause() != null ? this.getCause().hashCode() : 0);
-        return result;
+        return Objects.hash(file, message, detail);
     }
 }

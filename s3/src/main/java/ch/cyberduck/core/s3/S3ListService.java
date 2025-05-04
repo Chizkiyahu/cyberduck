@@ -26,7 +26,7 @@ import ch.cyberduck.core.exception.AccessDeniedException;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.InteroperabilityException;
 import ch.cyberduck.core.features.Versioning;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
@@ -58,12 +58,12 @@ public class S3ListService implements ListService {
                 }
                 catch(InteroperabilityException e) {
                     // Bucket set in hostname that leads to parser failure for XML reply
-                    log.warn("Failure {} listing buckets", e.getMessage());
+                    log.warn("Failure {} listing buckets", e.toString());
                     try {
                         return this.listObjects(directory, listener);
                     }
                     catch(BackgroundException ignored) {
-                        log.warn("Ignore failure {} listing objects", ignored.getMessage());
+                        log.warn("Ignore failure {} listing objects", ignored.toString());
                         // Throw original failure
                         throw e;
                     }
@@ -76,7 +76,7 @@ public class S3ListService implements ListService {
 
     private AttributedList<Path> listObjects(final Path directory, final ListProgressListener listener) throws BackgroundException {
         AttributedList<Path> objects;
-        final VersioningConfiguration versioning = new HostPreferences(session.getHost()).getBoolean("s3.listing.versioning.enable")
+        final VersioningConfiguration versioning = HostPreferencesFactory.get(session.getHost()).getBoolean("s3.listing.versioning.enable")
                 && null != session.getFeature(Versioning.class) ? session.getFeature(Versioning.class)
                 .getConfiguration(directory) : VersioningConfiguration.empty();
         if(versioning.isEnabled()) {
@@ -84,14 +84,14 @@ public class S3ListService implements ListService {
                 objects = new S3VersionedObjectListService(session, acl).list(directory, listener);
             }
             catch(AccessDeniedException | InteroperabilityException e) {
-                log.warn("Ignore failure listing versioned objects. {}", e.getMessage());
+                log.warn("Ignore failure {} listing versioned objects", e.toString());
                 objects = new S3ObjectListService(session, acl).list(directory, listener);
             }
         }
         else {
             objects = new S3ObjectListService(session, acl).list(directory, listener);
         }
-        if(new HostPreferences(session.getHost()).getBoolean("s3.upload.multipart.lookup")) {
+        if(HostPreferencesFactory.get(session.getHost()).getBoolean("s3.upload.multipart.lookup")) {
             try {
                 for(MultipartUpload upload : new S3DefaultMultipartService(session).find(directory)) {
                     final PathAttributes attributes = new PathAttributes();
@@ -102,7 +102,7 @@ public class S3ListService implements ListService {
                 }
             }
             catch(AccessDeniedException | InteroperabilityException e) {
-                log.warn("Ignore failure listing incomplete multipart uploads. {}", e.getMessage());
+                log.warn("Ignore failure {} listing incomplete multipart uploads", e.toString());
             }
         }
         return objects;

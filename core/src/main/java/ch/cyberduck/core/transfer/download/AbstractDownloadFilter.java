@@ -43,7 +43,7 @@ import ch.cyberduck.core.local.ApplicationLauncher;
 import ch.cyberduck.core.local.ApplicationLauncherFactory;
 import ch.cyberduck.core.local.QuarantineService;
 import ch.cyberduck.core.local.QuarantineServiceFactory;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.preferences.PreferencesReader;
 import ch.cyberduck.core.transfer.AutoTransferConnectionLimiter;
 import ch.cyberduck.core.transfer.Speedometer;
@@ -86,7 +86,7 @@ public abstract class AbstractDownloadFilter implements TransferPathFilter {
         this.symlinkResolver = symlinkResolver;
         this.attribute = attribute;
         this.options = options;
-        this.preferences = new HostPreferences(session.getHost());
+        this.preferences = HostPreferencesFactory.get(session.getHost());
     }
 
     @Override
@@ -140,14 +140,14 @@ public abstract class AbstractDownloadFilter implements TransferPathFilter {
                 if(StringUtils.startsWith(attributes.getDisplayname(), "file:")) {
                     final String filename = StringUtils.removeStart(attributes.getDisplayname(), "file:");
                     if(!StringUtils.equals(file.getName(), filename)) {
-                        status.withDisplayname(LocalFactory.get(local.getParent(), filename));
+                        status.setDisplayname(LocalFactory.get(local.getParent(), filename));
                         int no = 0;
                         while(status.getDisplayname().local.exists()) {
                             String proposal = String.format("%s-%d", FilenameUtils.getBaseName(filename), ++no);
                             if(StringUtils.isNotBlank(Path.getExtension(filename))) {
                                 proposal += String.format(".%s", Path.getExtension(filename));
                             }
-                            status.withDisplayname(LocalFactory.get(local.getParent(), proposal));
+                            status.setDisplayname(LocalFactory.get(local.getParent(), proposal));
                         }
                     }
                 }
@@ -196,11 +196,16 @@ public abstract class AbstractDownloadFilter implements TransferPathFilter {
                     }
                     else if(status.getLength() > threshold) {
                         // if file is smaller than threshold do not attempt to segment
-                        final long segmentSize = findSegmentSize(status.getLength(),
-                                new AutoTransferConnectionLimiter().getLimit(session.getHost()), threshold,
-                                preferences.getLong("queue.download.segments.size"),
-                                preferences.getLong("queue.download.segments.count"));
-
+                        final long segmentSize;
+                        if(preferences.getBoolean("queue.download.segments.size.dynamic")) {
+                            segmentSize = findSegmentSize(status.getLength(),
+                                    new AutoTransferConnectionLimiter().getLimit(session.getHost()), threshold,
+                                    preferences.getLong("queue.download.segments.size"),
+                                    preferences.getLong("queue.download.segments.count"));
+                        }
+                        else {
+                            segmentSize = preferences.getLong("queue.download.segments.size");
+                        }
                         // with default settings this can handle files up to 16 GiB, with 128 segments at 128 MiB.
                         // this scales down to files of size 20MiB with 2 segments at 10 MiB
                         long remaining = status.getLength(), offset = 0;
@@ -213,17 +218,17 @@ public abstract class AbstractDownloadFilter implements TransferPathFilter {
                             // Last part can be less than 5 MB. Adjust part size.
                             long length = Math.min(segmentSize, remaining);
                             final TransferStatus segmentStatus = new TransferStatus()
-                                    .segment(true) // Skip completion filter for single segment
-                                    .append(true) // Read with offset
-                                    .withOffset(offset)
-                                    .withLength(length)
-                                    .withRename(segmentFile);
+                                    .setSegment(true) // Skip completion filter for single segment
+                                    .setAppend(true) // Read with offset
+                                    .setOffset(offset)
+                                    .setLength(length)
+                                    .setRename(segmentFile);
                             log.debug("Adding status {} for segment {}", segmentStatus, segmentFile);
                             segments.add(segmentStatus);
                             remaining -= length;
                             offset += length;
                         }
-                        status.withSegments(segments);
+                        status.setSegments(segments);
                     }
                 }
             }

@@ -42,11 +42,15 @@ public class DAVTimestampFeatureTest extends AbstractDAVTest {
     public void testSetTimestamp() throws Exception {
         final TransferStatus status = new TransferStatus();
         final Path file = new DAVTouchFeature(session).touch(new Path(new DefaultHomeFinderService(session).find(), new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file)), status);
-        new DAVTimestampFeature(session).setTimestamp(file, status.withModified(5100L));
+        new DAVTimestampFeature(session).setTimestamp(file, status.setModified(5100L));
         final PathAttributes attr = new DAVAttributesFinderFeature(session).find(file);
         assertEquals(5000L, attr.getModificationDate());
         assertEquals(status.getResponse(), attr);
         assertEquals(5000L, new DefaultAttributesFinderFeature(session).find(file).getModificationDate());
+        new DAVMetadataFeature(session).setMetadata(file, status.setMetadata(Collections.singletonMap("Test", "Value")));
+        assertEquals(5000L, new DAVAttributesFinderFeature(session).find(file).getModificationDate());
+        new DAVMetadataFeature(session).setMetadata(file, status.setMetadata(Collections.emptyMap()));
+        assertEquals(5000L, new DAVAttributesFinderFeature(session).find(file).getModificationDate());
         new DAVDeleteFeature(session).delete(Collections.<Path>singletonList(file), new DisabledLoginCallback(), new Delete.DisabledCallback());
     }
 

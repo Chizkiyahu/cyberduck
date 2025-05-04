@@ -20,7 +20,6 @@ import ch.cyberduck.core.DisabledConnectionCallback;
 import ch.cyberduck.core.DisabledListProgressListener;
 import ch.cyberduck.core.DisabledLoginCallback;
 import ch.cyberduck.core.DisabledPasswordCallback;
-import ch.cyberduck.core.DisabledPasswordStore;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathAttributes;
 import ch.cyberduck.core.cryptomator.features.CryptoListService;
@@ -73,7 +72,7 @@ public class SFTPReadFeatureTest extends AbstractSFTPTest {
         final Path test = new Path(vault, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
         final CryptoVault cryptomator = new CryptoVault(vault);
         cryptomator.create(session, new VaultCredentials("test"), vaultVersion);
-        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordStore(), new DisabledPasswordCallback(), cryptomator));
+        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordCallback(), cryptomator));
         final CryptoWriteFeature<Void> writer = new CryptoWriteFeature<>(session, new SFTPWriteFeature(session), cryptomator);
         final FileHeader header = cryptomator.getFileHeaderCryptor().create();
         status.setHeader(cryptomator.getFileHeaderCryptor().encryptHeader(header));
@@ -90,7 +89,7 @@ public class SFTPReadFeatureTest extends AbstractSFTPTest {
         final TransferStatus read = new TransferStatus();
         read.setOffset(40000);
         read.setAppend(true);
-        read.withLength(30000); // ensure to read at least two chunks
+        read.setLength(30000); // ensure to read at least two chunks
         final InputStream in = new CryptoReadFeature(session, new SFTPReadFeature(session), cryptomator).read(test, read, new DisabledConnectionCallback());
         new StreamCopier(read, read).withLimit(30000L).transfer(in, buffer);
         final byte[] reference = new byte[30000];

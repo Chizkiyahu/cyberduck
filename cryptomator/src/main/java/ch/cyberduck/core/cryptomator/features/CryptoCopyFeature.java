@@ -70,10 +70,11 @@ public class CryptoCopyFeature implements Copy {
                     vault.contains(copy) ? vault.encrypt(session, copy) : copy,
                     vault.contains(copy) ? new TransferStatus(status) {
                         @Override
-                        public void setResponse(final PathAttributes attributes) {
+                        public TransferStatus setResponse(final PathAttributes attributes) {
                             status.setResponse(attributes);
                             // Will be converted back to clear text when decrypting file below set in default copy feature implementation using writer.
-                            super.setResponse(new PathAttributes(attributes).withSize(vault.toCiphertextSize(0L, attributes.getSize())));
+                            super.setResponse(new PathAttributes(attributes).setSize(vault.toCiphertextSize(0L, attributes.getSize())));
+                            return this;
                         }
                     } : status,
                     callback, listener);
@@ -94,14 +95,20 @@ public class CryptoCopyFeature implements Copy {
     public void preflight(final Path source, final Optional<Path> copy) throws BackgroundException {
         if(copy.isPresent()) {
             if(vault.contains(source) && vault.contains(copy.get())) {
-                proxy.withTarget(target).preflight(source, copy);
+                proxy.withTarget(target).preflight(
+                        vault.encrypt(session, source),
+                        Optional.of(vault.encrypt(session, copy.get())));
             }
             else {
-                new DefaultCopyFeature(session).withTarget(target).preflight(source, copy);
+                new DefaultCopyFeature(session).withTarget(target).preflight(
+                        vault.contains(source) ? vault.encrypt(session, source) : source,
+                        vault.contains(copy.get()) ? Optional.of(vault.encrypt(session, copy.get())) : copy);
             }
         }
         else {
-            new DefaultCopyFeature(session).withTarget(target).preflight(source, copy);
+            new DefaultCopyFeature(session).withTarget(target).preflight(
+                    vault.contains(source) ? vault.encrypt(session, source) : source,
+                    vault.contains(copy.get()) ? Optional.of(vault.encrypt(session, copy.get())) : copy);
         }
     }
 

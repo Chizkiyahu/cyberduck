@@ -35,7 +35,7 @@ import ch.cyberduck.core.io.BandwidthThrottle;
 import ch.cyberduck.core.io.HashAlgorithm;
 import ch.cyberduck.core.io.SHA1ChecksumCompute;
 import ch.cyberduck.core.io.StreamListener;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.threading.BackgroundExceptionCallable;
 import ch.cyberduck.core.threading.ThreadPool;
 import ch.cyberduck.core.threading.ThreadPoolFactory;
@@ -69,7 +69,7 @@ public class BoxLargeUploadService extends HttpUploadFeature<File, MessageDigest
 
     public BoxLargeUploadService(final BoxSession session, final BoxFileidProvider fileid, final Write<File> writer) {
         this(session, fileid, writer,
-                new HostPreferences(session.getHost()).getInteger("box.upload.multipart.concurrency"));
+                HostPreferencesFactory.get(session.getHost()).getInteger("box.upload.multipart.concurrency"));
     }
 
     public BoxLargeUploadService(final BoxSession session, final BoxFileidProvider fileid, final Write<File> writer, final Integer concurrency) {
@@ -111,7 +111,7 @@ public class BoxLargeUploadService extends HttpUploadFeature<File, MessageDigest
             if(optional.isPresent()) {
                 final File commited = optional.get();
                 // Mark parent status as complete
-                status.withResponse(new BoxAttributesFinderFeature(session, fileid).toAttributes(commited)).setComplete();
+                status.setResponse(new BoxAttributesFinderFeature(session, fileid).toAttributes(commited)).setComplete();
                 return commited;
             }
             throw new NotfoundException(file.getAbsolute());
@@ -132,16 +132,16 @@ public class BoxLargeUploadService extends HttpUploadFeature<File, MessageDigest
             public Part call() throws BackgroundException {
                 overall.validate();
                 final TransferStatus status = new TransferStatus()
-                        .segment(true)
-                        .withOffset(offset)
-                        .withLength(length);
+                        .setSegment(true)
+                        .setOffset(offset)
+                        .setLength(length);
                 status.setPart(partNumber);
                 status.setHeader(overall.getHeader());
                 status.setChecksum(writer.checksum(file, status).compute(local.getInputStream(), status));
                 final Map<String, String> parameters = new HashMap<>();
                 parameters.put(UPLOAD_SESSION_ID, uploadSessionId);
                 parameters.put(OVERALL_LENGTH, String.valueOf(overall.getLength()));
-                status.withParameters(parameters);
+                status.setParameters(parameters);
                 final File response = BoxLargeUploadService.this.upload(
                         file, local, throttle, listener, status, overall, status, callback);
                 log.info("Received response {} for part {}", response, partNumber);

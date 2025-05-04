@@ -1,0 +1,45 @@
+name: Publish Snapshot Artifacts
+on:
+  push:
+    branches:
+      - master
+jobs:
+  snapshot:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ macos-latest, ubuntu-latest, windows-latest ]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 21
+          cache: maven
+      - name: Add msbuild to PATH
+        if: ${{ runner.os == 'Windows' }}
+        uses: microsoft/setup-msbuild@v2
+      - name: Install Bonjour SDK
+        if: ${{ runner.os == 'Windows' }}
+        uses: crazy-max/ghaction-chocolatey@v3
+        with:
+          args: install bonjour -y
+      - name: Install WiX Toolset
+        if: ${{ runner.os == 'Windows' }}
+        uses: crazy-max/ghaction-chocolatey@v3
+        with:
+          args: install wixtoolset -y
+      - name: Install OpenSSL
+        if: ${{ runner.os == 'Windows' }}
+        uses: crazy-max/ghaction-chocolatey@v3
+        with:
+          args: install openssl -y
+      - name: Build with Maven
+        run: mvn --batch-mode deploy -DskipTests -DskipITs -DskipSign -DskipNotarize
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

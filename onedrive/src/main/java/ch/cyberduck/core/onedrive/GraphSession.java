@@ -33,10 +33,10 @@ import ch.cyberduck.core.http.HttpSession;
 import ch.cyberduck.core.oauth.OAuth2ErrorResponseInterceptor;
 import ch.cyberduck.core.oauth.OAuth2RequestInterceptor;
 import ch.cyberduck.core.onedrive.features.*;
-import ch.cyberduck.core.preferences.HostPreferences;
-import ch.cyberduck.core.proxy.ProxyFactory;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.shared.BufferWriteFeature;
+import ch.cyberduck.core.shared.DefaultHomeFinderService;
 import ch.cyberduck.core.ssl.X509KeyManager;
 import ch.cyberduck.core.ssl.X509TrustManager;
 import ch.cyberduck.core.threading.CancelCallback;
@@ -69,14 +69,13 @@ public abstract class GraphSession extends HttpSession<OneDriveAPI> {
 
     private final static String API_VERSION = "v1.0";
 
-    protected GraphFileIdProvider fileid;
+    protected GraphFileIdProvider fileid = new GraphFileIdProvider(this);
 
     private OAuth2RequestInterceptor authorizationService;
     private User.Metadata user;
 
     protected GraphSession(final Host host, final X509TrustManager trust, final X509KeyManager key) {
         super(host, trust, key);
-        this.fileid = new GraphFileIdProvider(this);
     }
 
     public abstract String getFileId(final DriveItem.Metadata metadata);
@@ -132,8 +131,7 @@ public abstract class GraphSession extends HttpSession<OneDriveAPI> {
     @Override
     protected OneDriveAPI connect(final ProxyFinder proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) throws HostParserException, ConnectionCanceledException {
         final HttpClientBuilder configuration = builder.build(proxy, this, prompt);
-        authorizationService = new OAuth2RequestInterceptor(
-                builder.build(proxy, this, prompt).build(), host, prompt) {
+        authorizationService = new OAuth2RequestInterceptor(configuration.build(), host, prompt) {
             @Override
             public void process(final HttpRequest request, final HttpContext context) throws HttpException, IOException {
                 if(request.containsHeader(HttpHeaders.AUTHORIZATION)) {
@@ -259,12 +257,12 @@ public abstract class GraphSession extends HttpSession<OneDriveAPI> {
             return (T) new GraphFindFeature(this, fileid);
         }
         if(type == Timestamp.class) {
-            if(new HostPreferences(host).getBoolean("onedrive.timestamp.enable")) {
+            if(HostPreferencesFactory.get(host).getBoolean("onedrive.timestamp.enable")) {
                 return (T) new GraphTimestampFeature(this, fileid);
             }
         }
         if(type == Quota.class) {
-            return (T) new GraphQuotaFeature(this, fileid);
+            return (T) new GraphQuotaFeature(this, fileid, new DefaultHomeFinderService(this));
         }
         if(type == UrlProvider.class) {
             return (T) new GraphUrlProvider();

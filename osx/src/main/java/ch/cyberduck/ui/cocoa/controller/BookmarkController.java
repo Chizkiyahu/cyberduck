@@ -42,6 +42,7 @@ import ch.cyberduck.core.diagnostics.ReachabilityDiagnosticsFactory;
 import ch.cyberduck.core.diagnostics.ReachabilityFactory;
 import ch.cyberduck.core.exception.HostParserException;
 import ch.cyberduck.core.local.BrowserLauncherFactory;
+import ch.cyberduck.core.local.FilesystemBookmarkResolverFactory;
 import ch.cyberduck.core.preferences.Preferences;
 import ch.cyberduck.core.preferences.PreferencesFactory;
 import ch.cyberduck.core.resources.IconCacheFactory;
@@ -105,7 +106,7 @@ public class BookmarkController extends SheetController implements CollectionLis
     @Outlet
     protected NSTextField usernameLabel;
     @Outlet
-    protected NSTextField passwordField;
+    protected NSSecureTextField passwordField;
     @Outlet
     private NSTextField passwordLabel;
     @Outlet
@@ -316,7 +317,7 @@ public class BookmarkController extends SheetController implements CollectionLis
     @Action
     public void portInputDidChange(final NSNotification sender) {
         try {
-            bookmark.setPort(Integer.valueOf(portField.stringValue()));
+            bookmark.setPort(Integer.parseInt(portField.stringValue()));
         }
         catch(NumberFormatException e) {
             bookmark.setPort(-1);
@@ -574,10 +575,11 @@ public class BookmarkController extends SheetController implements CollectionLis
     public void privateKeyPanelDidEnd_returnCode_contextInfo(NSOpenPanel sheet, final int returncode, ID contextInfo) {
         switch(returncode) {
             case SheetCallback.DEFAULT_OPTION:
-                final NSObject selected = privateKeyOpenPanel.URLs().lastObject();
-                if(selected != null) {
-                    final Local key = LocalFactory.get(Rococoa.cast(selected, NSURL.class).path());
-                    bookmark.getCredentials().setIdentity(key);
+                final NSObject url = privateKeyOpenPanel.URLs().lastObject();
+                if(url != null) {
+                    final Local selected = LocalFactory.get(Rococoa.cast(url, NSURL.class).path());
+                    selected.setBookmark(FilesystemBookmarkResolverFactory.get().create(selected));
+                    bookmark.getCredentials().setIdentity(selected);
                 }
                 break;
             case SheetCallback.ALTERNATE_OPTION:

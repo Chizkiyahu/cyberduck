@@ -24,6 +24,7 @@ import ch.cyberduck.core.io.StreamListener;
 import ch.cyberduck.core.shared.DefaultCopyFeature;
 import ch.cyberduck.core.transfer.TransferStatus;
 
+import java.util.EnumSet;
 import java.util.Optional;
 
 public class SDSDelegatingCopyFeature implements Copy {
@@ -55,7 +56,7 @@ public class SDSDelegatingCopyFeature implements Copy {
         }
         final Path result = copy.copy(source, target, status, callback, listener);
         nodeid.cache(target, null);
-        return result.withAttributes(new SDSAttributesFinderFeature(session, nodeid).find(result));
+        return new Path(result).withAttributes(new SDSAttributesFinderFeature(session, nodeid).find(result));
     }
 
     @Override
@@ -63,6 +64,13 @@ public class SDSDelegatingCopyFeature implements Copy {
         if(proxy.isSupported(source, target)) {
             proxy.preflight(source, target);
         }
-        copy.preflight(source, target);
+        else {
+            copy.preflight(source, target);
+        }
+    }
+
+    @Override
+    public EnumSet<Flags> features(final Path source, final Path target) {
+        return proxy.features(source, target);
     }
 }

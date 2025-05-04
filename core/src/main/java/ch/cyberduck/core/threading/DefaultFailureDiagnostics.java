@@ -23,6 +23,9 @@ import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.ConnectionCanceledException;
 import ch.cyberduck.core.exception.ConnectionRefusedException;
 import ch.cyberduck.core.exception.ConnectionTimeoutException;
+import ch.cyberduck.core.exception.ListCanceledException;
+import ch.cyberduck.core.exception.LocalAccessDeniedException;
+import ch.cyberduck.core.exception.LocalNotfoundException;
 import ch.cyberduck.core.exception.LoginFailureException;
 import ch.cyberduck.core.exception.QuotaException;
 import ch.cyberduck.core.exception.ResolveFailedException;
@@ -63,6 +66,9 @@ public final class DefaultFailureDiagnostics implements FailureDiagnostics<Backg
             if(failure instanceof TransferCanceledException) {
                 return Type.skip;
             }
+            if(failure instanceof ListCanceledException) {
+                return Type.skip;
+            }
             if(failure instanceof ConnectionCanceledException) {
                 return Type.cancel;
             }
@@ -99,6 +105,10 @@ public final class DefaultFailureDiagnostics implements FailureDiagnostics<Backg
             }
             if(cause instanceof AntiVirusAccessDeniedException) {
                 return Type.antivirus;
+            }
+            if(cause instanceof LocalAccessDeniedException
+                    || cause instanceof LocalNotfoundException) {
+                return Type.filesystem;
             }
         }
         return Type.application;

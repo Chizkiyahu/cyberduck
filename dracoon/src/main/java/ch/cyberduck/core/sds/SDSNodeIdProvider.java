@@ -21,7 +21,7 @@ import ch.cyberduck.core.URIEncoder;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.NotfoundException;
 import ch.cyberduck.core.features.VersionIdProvider;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.sds.io.swagger.client.ApiException;
 import ch.cyberduck.core.sds.io.swagger.client.api.NodesApi;
 import ch.cyberduck.core.sds.io.swagger.client.model.Node;
@@ -30,8 +30,11 @@ import ch.cyberduck.core.unicode.NFCNormalizer;
 import ch.cyberduck.core.unicode.UnicodeNormalizer;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.http.HttpStatus;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import java.util.concurrent.Callable;
 
 public class SDSNodeIdProvider extends CachingVersionIdProvider implements VersionIdProvider {
     private static final Logger log = LogManager.getLogger(SDSNodeIdProvider.class);
@@ -57,7 +60,7 @@ public class SDSNodeIdProvider extends CachingVersionIdProvider implements Versi
             log.debug("Return cached versionid {} for file {}", cached, file);
             return cached;
         }
-        return this.getNodeId(file, new HostPreferences(session.getHost()).getInteger("sds.listing.chunksize"));
+        return this.getNodeId(file, HostPreferencesFactory.get(session.getHost()).getInteger("sds.listing.chunksize"));
     }
 
     protected String getNodeId(final Path file, final int chunksize) throws BackgroundException {
@@ -106,5 +109,26 @@ public class SDSNodeIdProvider extends CachingVersionIdProvider implements Versi
         catch(ApiException e) {
             throw new SDSExceptionMappingService(this).map("Failure to read attributes of {0}", e, file);
         }
+    }
+
+    public <V> V retry(final Path file, final ApiExceptionCallable<V> callable) throws ApiException, BackgroundException {
+        try {
+            return callable.call();
+        }
+        catch(ApiException e) {
+            switch(e.getCode()) {
+                case HttpStatus.SC_NOT_FOUND:
+                    // Parent directory not found. Try again with resetting node id cache
+                    this.cache(file, null);
+                    log.warn("Retry {}", callable);
+                    return callable.call();
+            }
+            throw e;
+        }
+    }
+
+    public interface ApiExceptionCallable<T> extends Callable<T> {
+        @Override
+        T call() throws ApiException, BackgroundException;
     }
 }

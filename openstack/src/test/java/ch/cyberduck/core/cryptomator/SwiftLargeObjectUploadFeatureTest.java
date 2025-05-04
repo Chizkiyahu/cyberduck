@@ -21,7 +21,6 @@ import ch.cyberduck.core.DisabledConnectionCallback;
 import ch.cyberduck.core.DisabledListProgressListener;
 import ch.cyberduck.core.DisabledLoginCallback;
 import ch.cyberduck.core.DisabledPasswordCallback;
-import ch.cyberduck.core.DisabledPasswordStore;
 import ch.cyberduck.core.DisabledProgressListener;
 import ch.cyberduck.core.Local;
 import ch.cyberduck.core.Path;
@@ -74,7 +73,7 @@ public class SwiftLargeObjectUploadFeatureTest extends AbstractSwiftTest {
         final Path test = new Path(vault, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
         final CryptoVault cryptomator = new CryptoVault(vault);
         cryptomator.create(session, new VaultCredentials("test"), vaultVersion);
-        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordStore(), new DisabledPasswordCallback(), cryptomator));
+        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordCallback(), cryptomator));
         final SwiftRegionService regionService = new SwiftRegionService(session);
         final CryptoUploadFeature m = new CryptoUploadFeature<>(session,
                 new SwiftLargeObjectUploadFeature(session, regionService, new SwiftWriteFeature(session,
@@ -96,7 +95,7 @@ public class SwiftLargeObjectUploadFeatureTest extends AbstractSwiftTest {
         assertTrue(cryptomator.getFeature(session, Find.class, new SwiftFindFeature(session)).find(test));
         assertEquals(content.length, new CryptoListService(session, new SwiftListService(session, regionService), cryptomator).list(test.getParent(), new DisabledListProgressListener()).get(test).attributes().getSize());
         final ByteArrayOutputStream buffer = new ByteArrayOutputStream(content.length);
-        final TransferStatus readStatus = new TransferStatus().withLength(content.length);
+        final TransferStatus readStatus = new TransferStatus().setLength(content.length);
         final InputStream in = new CryptoReadFeature(session, new SwiftReadFeature(session, regionService), cryptomator).read(test, readStatus, new DisabledConnectionCallback());
         new StreamCopier(readStatus, readStatus).transfer(in, buffer);
         assertArrayEquals(content, buffer.toByteArray());

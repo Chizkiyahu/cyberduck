@@ -37,7 +37,7 @@ import ch.cyberduck.core.features.Read;
 import ch.cyberduck.core.features.Timestamp;
 import ch.cyberduck.core.features.Touch;
 import ch.cyberduck.core.features.Write;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.proxy.ProxySocketFactory;
 import ch.cyberduck.core.random.SecureRandomProviderFactory;
@@ -111,16 +111,19 @@ public class SMBSession extends ch.cyberduck.core.Session<Connection> {
         }
     }
 
+    private static final GenericObjectPoolConfig<DiskShareWrapper> config = new GenericObjectPoolConfig<>();
+
+    static {
+        config.setJmxEnabled(false);
+        config.setBlockWhenExhausted(true);
+        config.setMaxIdle(1);
+        config.setMaxTotal(Integer.MAX_VALUE);
+        config.setTestOnBorrow(true);
+    }
+
     private final class DiskSharePool extends GenericObjectPool<DiskShareWrapper> {
         public DiskSharePool(final String shareName) {
-            super(new DiskSharePoolObjectFactory(shareName));
-            final GenericObjectPoolConfig<DiskShareWrapper> config = new GenericObjectPoolConfig<>();
-            config.setJmxEnabled(false);
-            config.setBlockWhenExhausted(true);
-            config.setMaxIdle(1);
-            config.setMaxTotal(Integer.MAX_VALUE);
-            config.setTestOnBorrow(true);
-            this.setConfig(config);
+            super(new DiskSharePoolObjectFactory(shareName), config);
             this.setSwallowedExceptionListener(new SwallowedExceptionListener() {
                 @Override
                 public void onSwallowException(final Exception e) {
@@ -227,17 +230,17 @@ public class SMBSession extends ch.cyberduck.core.Session<Connection> {
     protected Connection connect(final ProxyFinder proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
         try {
             final SMBClient client = new SMBClient(SmbConfig.builder()
-                    .withWorkStationName(new HostPreferences(host).getProperty("smb.ntlm.workstation"))
+                    .withWorkStationName(HostPreferencesFactory.get(host).getProperty("smb.ntlm.workstation"))
                     .withSocketFactory(new ProxySocketFactory(host))
-                    .withTimeout(ConnectionTimeoutFactory.get(new HostPreferences(host)).getTimeout(), TimeUnit.SECONDS)
-                    .withSoTimeout(new HostPreferences(host).getLong("smb.socket.timeout"), TimeUnit.SECONDS)
+                    .withTimeout(ConnectionTimeoutFactory.get(HostPreferencesFactory.get(host)).getTimeout(), TimeUnit.SECONDS)
+                    .withSoTimeout(HostPreferencesFactory.get(host).getLong("smb.socket.timeout"), TimeUnit.SECONDS)
                     .withAuthenticators(new NtlmAuthenticator.Factory())
-                    .withDfsEnabled(new HostPreferences(host).getBoolean("smb.dfs.enable"))
-                    .withEncryptData(new HostPreferences(host).getBoolean("smb.encrypt.enable"))
-                    .withSigningEnabled(new HostPreferences(host).getBoolean("smb.signing.enable"))
-                    .withSigningRequired(new HostPreferences(host).getBoolean("smb.signing.required"))
+                    .withDfsEnabled(HostPreferencesFactory.get(host).getBoolean("smb.dfs.enable"))
+                    .withEncryptData(HostPreferencesFactory.get(host).getBoolean("smb.encrypt.enable"))
+                    .withSigningEnabled(HostPreferencesFactory.get(host).getBoolean("smb.signing.enable"))
+                    .withSigningRequired(HostPreferencesFactory.get(host).getBoolean("smb.signing.required"))
                     .withRandomProvider(SecureRandomProviderFactory.get().provide())
-                    .withMultiProtocolNegotiate(new HostPreferences(host).getBoolean("smb.protocol.negotiate.enable"))
+                    .withMultiProtocolNegotiate(HostPreferencesFactory.get(host).getBoolean("smb.protocol.negotiate.enable"))
                     .withTransportLayerFactory(new AsyncDirectTcpTransportFactory<>())
                     .build());
             final Connection connection = client.connect(getHost().getHostname(), getHost().getPort());
@@ -272,7 +275,7 @@ public class SMBSession extends ch.cyberduck.core.Session<Connection> {
             }
             else {
                 username = credentials.getUsername();
-                domain = new HostPreferences(host).getProperty("smb.domain.default");
+                domain = HostPreferencesFactory.get(host).getProperty("smb.domain.default");
             }
             context = new AuthenticationContext(username, credentials.getPassword().toCharArray(), domain);
         }
@@ -287,10 +290,13 @@ public class SMBSession extends ch.cyberduck.core.Session<Connection> {
     public DiskShareWrapper openShare(final Path file) throws BackgroundException {
         try {
             final String shareName = containerService.getContainer(file).getName();
-            final GenericObjectPool<DiskShareWrapper> pool;
+            GenericObjectPool<DiskShareWrapper> pool;
             lock.lock();
             try {
-                pool = pools.getOrDefault(shareName, new DiskSharePool(shareName));
+                pool = pools.get(shareName);
+                if(null == pool) {
+                    pool = new DiskSharePool(shareName);
+                }
                 if(pool.getNumIdle() == 0) {
                     log.warn("No idle share for {} with {} active", shareName, pool.getNumActive());
                 }

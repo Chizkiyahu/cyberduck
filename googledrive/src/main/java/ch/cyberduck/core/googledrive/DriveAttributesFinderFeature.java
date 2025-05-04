@@ -104,7 +104,7 @@ public class DriveAttributesFinderFeature implements AttributesFinder, Attribute
         if(null != f.getTrashed()) {
             if(f.getTrashed()) {
                 // Mark as hidden
-                attributes.setHidden(true);
+                attributes.setTrashed(true);
             }
         }
         if(null != f.getSize()) {
@@ -127,6 +127,9 @@ public class DriveAttributesFinderFeature implements AttributesFinder, Attribute
                 attributes.setSize(UrlFileWriterFactory.get().write(new DescriptiveUrl(f.getWebViewLink()))
                         .getBytes(Charset.defaultCharset()).length);
             }
+        }
+        if(null != f.getProperties()) {
+            attributes.setMetadata(f.getProperties());
         }
         return attributes;
     }

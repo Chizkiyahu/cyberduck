@@ -29,22 +29,23 @@ import org.apache.logging.log4j.Logger;
 import org.rococoa.ObjCObjectByReference;
 import org.rococoa.cocoa.foundation.NSError;
 
+import java.text.MessageFormat;
+
 public class WorkspaceSymlinkFeature implements Symlink {
     private static final Logger log = LogManager.getLogger(WorkspaceSymlinkFeature.class);
 
     @Override
-    public void symlink(final Local file, final String target) throws AccessDeniedException {
+    public void symlink(final Local link, final String target) throws AccessDeniedException {
         final ObjCObjectByReference error = new ObjCObjectByReference();
         final boolean success = NSFileManager.defaultManager().createSymbolicLinkAtPath_withDestinationPath_error(
-                file.getAbsolute(), target, error);
+                link.getAbsolute(), target, error);
         if(!success) {
             final NSError f = error.getValueAs(NSError.class);
             if(null == f) {
-                throw new LocalAccessDeniedException(String.format("%s %s",
-                        LocaleFactory.localizedString("Cannot create file", "Error"), file.getAbsolute()));
+                throw new LocalAccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Cannot create {0}", "Error"), link.getName()));
             }
             throw new LocalAccessDeniedException(String.format("%s", f.localizedDescription()));
         }
-        log.debug("Created symbolic link {} with target {}", file, target);
+        log.debug("Created symbolic link {} with target {}", link, target);
     }
 }

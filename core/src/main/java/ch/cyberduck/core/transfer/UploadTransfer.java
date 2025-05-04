@@ -26,7 +26,6 @@ import ch.cyberduck.core.Host;
 import ch.cyberduck.core.ListProgressListener;
 import ch.cyberduck.core.Local;
 import ch.cyberduck.core.LocaleFactory;
-import ch.cyberduck.core.NullFilter;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathCache;
 import ch.cyberduck.core.ProgressListener;
@@ -40,12 +39,10 @@ import ch.cyberduck.core.features.Find;
 import ch.cyberduck.core.features.Symlink;
 import ch.cyberduck.core.features.Upload;
 import ch.cyberduck.core.features.Versioning;
-import ch.cyberduck.core.filter.UploadRegexFilter;
+import ch.cyberduck.core.filter.UploadFilter;
 import ch.cyberduck.core.io.BandwidthThrottle;
 import ch.cyberduck.core.io.StreamListener;
 import ch.cyberduck.core.preferences.PreferencesFactory;
-import ch.cyberduck.core.shared.DefaultAttributesFinderFeature;
-import ch.cyberduck.core.shared.DefaultFindFeature;
 import ch.cyberduck.core.transfer.normalizer.UploadRootPathsNormalizer;
 import ch.cyberduck.core.transfer.symlink.UploadSymlinkResolver;
 import ch.cyberduck.core.transfer.upload.AbstractUploadFilter;
@@ -84,8 +81,7 @@ public class UploadTransfer extends Transfer {
     private UploadFilterOptions options = new UploadFilterOptions(host);
 
     public UploadTransfer(final Host host, final Path root, final Local local) {
-        this(host, Collections.singletonList(new TransferItem(root, local)),
-                PreferencesFactory.get().getBoolean("queue.upload.skip.enable") ? new UploadRegexFilter() : new NullFilter<>());
+        this(host, Collections.singletonList(new TransferItem(root, local)), new UploadFilter());
     }
 
     public UploadTransfer(final Host host, final Path root, final Local local, final Filter<Local> f) {
@@ -93,8 +89,7 @@ public class UploadTransfer extends Transfer {
     }
 
     public UploadTransfer(final Host host, final List<TransferItem> roots) {
-        this(host, roots,
-                PreferencesFactory.get().getBoolean("queue.upload.skip.enable") ? new UploadRegexFilter() : new NullFilter<>());
+        this(host, roots, new UploadFilter());
     }
 
     public UploadTransfer(final Host host, final List<TransferItem> roots, final Filter<Local> f) {
@@ -144,6 +139,13 @@ public class UploadTransfer extends Transfer {
         return children;
     }
 
+    /**
+     * @return True if only single file in transfer
+     */
+    private boolean isSingle() {
+        return roots.size() == 1 && !roots.stream().filter(item -> item.remote.isDirectory()).findAny().isPresent();
+    }
+
     @Override
     public AbstractUploadFilter filter(final Session<?> source, final Session<?> destination, final TransferAction action, final ProgressListener listener) {
         log.debug("Filter transfer with action {} and options {}", action, options);
@@ -151,14 +153,8 @@ public class UploadTransfer extends Transfer {
         final UploadSymlinkResolver resolver = new UploadSymlinkResolver(symlink, roots);
         final Find find;
         final AttributesFinder attributes;
-        if(roots.size() > 1 || roots.stream().filter(item -> item.remote.isDirectory()).findAny().isPresent()) {
-            find = new CachingFindFeature(source, cache, source.getFeature(Find.class, new DefaultFindFeature(source)));
-            attributes = new CachingAttributesFinderFeature(source, cache, source.getFeature(AttributesFinder.class, new DefaultAttributesFinderFeature(source)));
-        }
-        else {
-            find = new CachingFindFeature(source, cache, source.getFeature(Find.class));
-            attributes = new CachingAttributesFinderFeature(source, cache, source.getFeature(AttributesFinder.class));
-        }
+        find = this.isSingle() ? new CachingFindFeature(source, cache, source.getFeature(Find.class)) : new CachingFindFeature(source, cache);
+        attributes = this.isSingle() ? new CachingAttributesFinderFeature(source, cache, source.getFeature(AttributesFinder.class)) : new CachingAttributesFinderFeature(source, cache);
         log.debug("Determined features {} and {}", find, attributes);
         if(action.equals(TransferAction.resume)) {
             return new ResumeFilter(resolver, source, find, attributes, options);
@@ -198,7 +194,8 @@ public class UploadTransfer extends Transfer {
         }
         if(action.equals(TransferAction.callback)) {
             for(TransferItem upload : roots) {
-                if(new CachingFindFeature(source, cache, source.getFeature(Find.class, new DefaultFindFeature(source))).find(upload.remote)) {
+                final Find find = this.isSingle() ? new CachingFindFeature(source, cache, source.getFeature(Find.class)) : new CachingFindFeature(source, cache);
+                if(find.find(upload.remote)) {
                     // Found remote file
                     if(upload.remote.isDirectory()) {
                         if(this.list(source, upload.remote, upload.local, listener).isEmpty()) {
@@ -258,7 +255,7 @@ public class UploadTransfer extends Transfer {
                 filter.complete(
                         status.getRename().remote != null ? status.getRename().remote : entry.getKey().remote,
                         status.getRename().local != null ? status.getRename().local : entry.getKey().local,
-                        status.complete(), progress);
+                        status.setComplete(), progress);
             }
             catch(BackgroundException e) {
                 if(error.prompt(entry.getKey(), status, e, files.size())) {

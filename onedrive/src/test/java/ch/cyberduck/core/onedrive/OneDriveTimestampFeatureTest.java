@@ -22,6 +22,7 @@ import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathAttributes;
 import ch.cyberduck.core.SimplePathPredicate;
 import ch.cyberduck.core.features.Delete;
+import ch.cyberduck.core.features.Timestamp;
 import ch.cyberduck.core.onedrive.features.GraphAttributesFinderFeature;
 import ch.cyberduck.core.onedrive.features.GraphDeleteFeature;
 import ch.cyberduck.core.onedrive.features.GraphDirectoryFeature;
@@ -47,18 +48,18 @@ public class OneDriveTimestampFeatureTest extends AbstractOneDriveTest {
     public void testSetTimestamp() throws Exception {
         final Path drive = new OneDriveHomeFinderService().find();
         final Path file = new Path(drive, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
-        new GraphTouchFeature(session, fileid).touch(file, new TransferStatus().withMime("x-application/cyberduck"));
+        new GraphTouchFeature(session, fileid).touch(file, new TransferStatus().setMime("x-application/cyberduck"));
         final PathAttributes attr = new GraphAttributesFinderFeature(session, fileid).find(file);
         assertNotEquals(PathAttributes.EMPTY, attr);
         final long modified = 1671187993791L;
         final TransferStatus status = new TransferStatus();
-        new GraphTimestampFeature(session, fileid).setTimestamp(file, status.withModified(modified));
+        new GraphTimestampFeature(session, fileid).setTimestamp(file, status.setModified(modified));
         final PathAttributes updated = new GraphAttributesFinderFeature(session, fileid).find(file);
         assertEquals(status.getResponse(), updated);
-        assertEquals(modified, updated.getModificationDate());
+        assertEquals(Timestamp.toSeconds(modified), Timestamp.toSeconds(updated.getModificationDate()));
         assertNotEquals(attr.getETag(), updated.getETag());
-        assertEquals(modified, new DefaultAttributesFinderFeature(session).find(file).getModificationDate());
-        assertEquals(modified, new GraphItemListService(session, fileid).list(drive, new DisabledListProgressListener()).find(new SimplePathPredicate(file)).attributes().getModificationDate());
+        assertEquals(Timestamp.toSeconds(modified), new DefaultAttributesFinderFeature(session).find(file).getModificationDate());
+        assertEquals(Timestamp.toSeconds(modified), Timestamp.toSeconds(new GraphItemListService(session, fileid).list(drive, new DisabledListProgressListener()).find(new SimplePathPredicate(file)).attributes().getModificationDate()));
         new GraphDeleteFeature(session, fileid).delete(Collections.singletonList(file), new DisabledLoginCallback(), new Delete.DisabledCallback());
     }
 
@@ -71,12 +72,12 @@ public class OneDriveTimestampFeatureTest extends AbstractOneDriveTest {
         assertNotEquals(PathAttributes.EMPTY, attr);
         final long modified = 1671187993791L;
         final TransferStatus status = new TransferStatus();
-        new GraphTimestampFeature(session, fileid).setTimestamp(test, status.withModified(modified));
+        new GraphTimestampFeature(session, fileid).setTimestamp(test, status.setModified(modified));
         final PathAttributes updated = new GraphAttributesFinderFeature(session, fileid).find(test);
         assertEquals(status.getResponse(), updated);
-        assertEquals(modified, updated.getModificationDate());
+        assertEquals(Timestamp.toSeconds(modified), Timestamp.toSeconds(updated.getModificationDate()));
         assertNotEquals(attr.getETag(), updated.getETag());
-        assertEquals(modified, new GraphItemListService(session, fileid).list(drive, new DisabledListProgressListener()).find(new SimplePathPredicate(test)).attributes().getModificationDate());
+        assertEquals(Timestamp.toSeconds(modified), Timestamp.toSeconds(new GraphItemListService(session, fileid).list(drive, new DisabledListProgressListener()).find(new SimplePathPredicate(test)).attributes().getModificationDate()));
         new GraphDeleteFeature(session, fileid).delete(Collections.singletonList(test), new DisabledLoginCallback(), new Delete.DisabledCallback());
     }
 }

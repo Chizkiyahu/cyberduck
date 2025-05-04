@@ -51,14 +51,15 @@ public class CryptoTouchFeature<Reply> implements Touch<Reply> {
         status.setNonces(new RandomNonceGenerator(vault.getNonceSize()));
         final Path target = proxy.touch(vault.encrypt(session, file), new TransferStatus(status) {
             @Override
-            public void setResponse(final PathAttributes attributes) {
+            public TransferStatus setResponse(final PathAttributes attributes) {
                 status.setResponse(attributes);
                 // Will be converted back to clear text when decrypting file below set in default touch feature implementation using writer.
-                super.setResponse(new PathAttributes(attributes).withSize(vault.toCiphertextSize(0L, attributes.getSize())));
+                super.setResponse(new PathAttributes(attributes).setSize(vault.toCiphertextSize(0L, attributes.getSize())));
+                return this;
             }
         });
         final Path decrypt = vault.decrypt(session, target);
-        decrypt.attributes().withVersionId(target.attributes().getVersionId());
+        decrypt.attributes().setVersionId(target.attributes().getVersionId());
         return decrypt;
     }
 
@@ -67,7 +68,7 @@ public class CryptoTouchFeature<Reply> implements Touch<Reply> {
         if(!vault.getFilenameProvider().isValid(filename)) {
             throw new InvalidFilenameException(MessageFormat.format(LocaleFactory.localizedString("Cannot create {0}", "Error"), filename));
         }
-        proxy.preflight(workdir, filename);
+        proxy.preflight(vault.encrypt(session, workdir), filename);
     }
 
     @Override

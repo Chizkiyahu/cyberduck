@@ -151,8 +151,8 @@ public class TusUploadFeature extends HttpUploadFeature<Void, MessageDigest> {
             // Await upload of chunks
             Interruptibles.awaitAll(chunks);
             // Mark parent status as complete
-            status.setComplete();
-            preferences.deleteProperty(toUploadUrlPropertyKey(host, file, status));
+            log.debug("Completed all chunks to {} for {}", uploadUrl, file);
+            preferences.deleteProperty(toUploadUrlPropertyKey(host, file, status.setComplete()));
             return null;
         }
         catch(HttpResponseException e) {
@@ -173,14 +173,14 @@ public class TusUploadFeature extends HttpUploadFeature<Void, MessageDigest> {
             public Void call() throws BackgroundException {
                 overall.validate();
                 final TransferStatus status = new TransferStatus()
-                        .segment(true)
-                        .withOffset(offset)
-                        .withLength(length);
+                        .setSegment(true)
+                        .setOffset(offset)
+                        .setLength(length);
                 status.setHeader(overall.getHeader());
                 status.setChecksum(writer.checksum(file, status).compute(local.getInputStream(), status));
                 final Map<String, String> parameters = new HashMap<>();
                 parameters.put(UPLOAD_URL, uploadUrl);
-                status.withParameters(parameters);
+                status.setParameters(parameters);
                 final Void response = TusUploadFeature.this.upload(
                         file, local, throttle, listener, status, overall, status, callback);
                 log.info("Received response {}", response);

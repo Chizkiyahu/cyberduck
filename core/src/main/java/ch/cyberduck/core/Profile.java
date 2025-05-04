@@ -39,6 +39,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -148,10 +149,6 @@ public class Profile implements Protocol {
         return serializer.getSerialized();
     }
 
-    public Protocol getProtocol() {
-        return parent;
-    }
-
     @Override
     public String getPrefix() {
         return parent.getPrefix();
@@ -165,7 +162,7 @@ public class Profile implements Protocol {
         if(this.isBundled()) {
             return true;
         }
-        final String protocol = this.value(PROTOCOL_KEY);
+        final String protocol = parent.getIdentifier();
         final String vendor = this.value(VENDOR_KEY);
         if(StringUtils.isNotBlank(protocol) && StringUtils.isNotBlank(vendor)) {
             final String property = PreferencesFactory.get().getProperty(StringUtils.lowerCase(String.format("profiles.%s.%s.enabled", protocol, vendor)));
@@ -180,7 +177,11 @@ public class Profile implements Protocol {
 
     @Override
     public boolean isDeprecated() {
-        return this.bool(DEPRECATED_KEY);
+        final Boolean v = this.bool(DEPRECATED_KEY);
+        if(null == v) {
+            return false;
+        }
+        return v;
     }
 
     @Override
@@ -277,11 +278,11 @@ public class Profile implements Protocol {
     }
 
     public boolean isBundled() {
-        final String v = this.value(BUNDLED_KEY);
-        if(StringUtils.isBlank(v)) {
+        final Boolean v = this.bool(BUNDLED_KEY);
+        if(null == v) {
             return false;
         }
-        return Boolean.parseBoolean(v);
+        return v;
     }
 
     @Override
@@ -461,14 +462,18 @@ public class Profile implements Protocol {
     public Set<Location.Name> getRegions() {
         final List<String> regions = this.list(REGIONS_KEY);
         if(regions.isEmpty()) {
+            final String region = this.getRegion();
+            if(StringUtils.isNotBlank(region)) {
+                return parent.toLocations(Collections.singletonList(region));
+            }
             return parent.getRegions();
         }
-        return parent.getRegions(regions);
+        return parent.toLocations(regions);
     }
 
     @Override
-    public Set<Location.Name> getRegions(final List<String> regions) {
-        return parent.getRegions(regions);
+    public Set<Location.Name> toLocations(final List<String> regions) {
+        return parent.toLocations(regions);
     }
 
     @Override
@@ -478,82 +483,92 @@ public class Profile implements Protocol {
 
     @Override
     public boolean isAnonymousConfigurable() {
-        if(StringUtils.isBlank(this.value(ANONYMOUS_CONFIGURABLE_KEY))) {
+        final Boolean v = this.bool(ANONYMOUS_CONFIGURABLE_KEY);
+        if(null == v) {
             return parent.isAnonymousConfigurable();
         }
-        return this.bool(ANONYMOUS_CONFIGURABLE_KEY);
+        return v;
     }
 
     @Override
     public boolean isUsernameConfigurable() {
-        if(StringUtils.isBlank(this.value(USERNAME_CONFIGURABLE_KEY))) {
+        final Boolean v = this.bool(USERNAME_CONFIGURABLE_KEY);
+        if(null == v) {
             return parent.isUsernameConfigurable();
         }
-        return this.bool(USERNAME_CONFIGURABLE_KEY);
+        return v;
     }
 
     @Override
     public boolean isPasswordConfigurable() {
-        if(StringUtils.isBlank(this.value(PASSWORD_CONFIGURABLE_KEY))) {
+        final Boolean v = this.bool(PASSWORD_CONFIGURABLE_KEY);
+        if(null == v) {
             return parent.isPasswordConfigurable();
         }
-        return this.bool(PASSWORD_CONFIGURABLE_KEY);
+        return v;
     }
 
     @Override
     public boolean isTokenConfigurable() {
-        if(StringUtils.isBlank(this.value(TOKEN_CONFIGURABLE_KEY))) {
+        final Boolean v = this.bool(TOKEN_CONFIGURABLE_KEY);
+        if(null == v) {
             return parent.isTokenConfigurable();
         }
-        return this.bool(TOKEN_CONFIGURABLE_KEY);
+        return v;
     }
 
     @Override
     public boolean isOAuthConfigurable() {
-        if(StringUtils.isNotBlank(this.value(OAUTH_CONFIGURABLE_KEY))) {
-            return this.bool(OAUTH_CONFIGURABLE_KEY);
+        final Boolean v = this.bool(OAUTH_CONFIGURABLE_KEY);
+        if(null == v) {
+            return StringUtils.isNotBlank(this.getOAuthClientId());
         }
-        return StringUtils.isNotBlank(this.getOAuthClientId());
+        return v;
     }
 
     @Override
     public boolean isCertificateConfigurable() {
-        if(StringUtils.isBlank(this.value(CERTIFICATE_CONFIGURABLE_KEY))) {
+        final Boolean v = this.bool(CERTIFICATE_CONFIGURABLE_KEY);
+        if(null == v) {
             return parent.isCertificateConfigurable();
         }
-        return this.bool(CERTIFICATE_CONFIGURABLE_KEY);
+        return v;
     }
 
     @Override
     public boolean isPrivateKeyConfigurable() {
-        if(StringUtils.isBlank(this.value(PRIVATE_KEY_CONFIGURABLE_KEY))) {
+        final Boolean v = this.bool(PRIVATE_KEY_CONFIGURABLE_KEY);
+        if(null == v) {
             return parent.isPrivateKeyConfigurable();
         }
-        return this.bool(PRIVATE_KEY_CONFIGURABLE_KEY);
+        return v;
     }
 
     @Override
     public boolean isHostnameConfigurable() {
-        if(StringUtils.isBlank(this.value(HOSTNAME_CONFIGURABLE_KEY))) {
+        final Boolean v = this.bool(HOSTNAME_CONFIGURABLE_KEY);
+        if(null == v) {
             return parent.isHostnameConfigurable();
         }
-        return this.bool(HOSTNAME_CONFIGURABLE_KEY);
+        return v;
     }
 
     @Override
     public boolean isPortConfigurable() {
-        if(StringUtils.isBlank(this.value(PORT_CONFIGURABLE_KEY))) {
+        final Boolean v = this.bool(PORT_CONFIGURABLE_KEY);
+        if(null == v) {
             return parent.isPortConfigurable();
         }
-        return this.bool(PORT_CONFIGURABLE_KEY);
+        return v;
     }
 
     @Override
     public boolean isPathConfigurable() {
-        if(StringUtils.isBlank(this.value(PATH_CONFIGURABLE_KEY))) {
+        final Boolean v = this.bool(PATH_CONFIGURABLE_KEY);
+        if(null == v) {
             return parent.isPathConfigurable();
         }
-        return this.bool(PATH_CONFIGURABLE_KEY);
+        return v;
     }
 
     @Override
@@ -612,10 +627,11 @@ public class Profile implements Protocol {
 
     @Override
     public boolean isOAuthPKCE() {
-        if(StringUtils.isBlank(this.value(OAUTH_PKCE_KEY))) {
+        final Boolean v = this.bool(OAUTH_PKCE_KEY);
+        if(null == v) {
             return parent.isOAuthPKCE();
         }
-        return this.bool(OAUTH_PKCE_KEY);
+        return v;
     }
 
     @Override
@@ -629,13 +645,14 @@ public class Profile implements Protocol {
 
     @Override
     public Map<String, String> getProperties() {
-        final List<String> properties = this.list(PROPERTIES_KEY);
-        if(properties.isEmpty()) {
-            return parent.getProperties();
-        }
-        return properties.stream().distinct().collect(Collectors.toMap(
+        final Map<String, String> properties = new HashMap<>(parent.getProperties());
+        // In profile as array
+        properties.putAll(this.list(PROPERTIES_KEY).stream().distinct().collect(Collectors.toMap(
                 property -> StringUtils.contains(property, '=') ? StringUtils.substringBefore(property, '=') : property,
-                property -> StringUtils.contains(property, '=') ? substitutor.replace(StringUtils.substringAfter(property, '=')) : StringUtils.EMPTY));
+                property -> StringUtils.contains(property, '=') ? substitutor.replace(StringUtils.substringAfter(property, '=')) : StringUtils.EMPTY)));
+        // In profile as dict
+        properties.putAll(this.map(PROPERTIES_KEY));
+        return properties;
     }
 
     @Override
@@ -671,7 +688,19 @@ public class Profile implements Protocol {
         return substituted;
     }
 
-    private boolean bool(final String key) {
+    private Map<String, String> map(final String key) {
+        final Map<String, String> map = dict.mapForKey(key);
+        if(null == map) {
+            return Collections.emptyMap();
+        }
+        final Map<String, String> substituted = new HashMap<>(map);
+        for(Map.Entry<String, String> entry : substituted.entrySet()) {
+            entry.setValue(substitutor.replace(entry.getValue()));
+        }
+        return substituted;
+    }
+
+    private Boolean bool(final String key) {
         return dict.booleanForKey(key);
     }
 

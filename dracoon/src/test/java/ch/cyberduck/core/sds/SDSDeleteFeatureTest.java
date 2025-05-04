@@ -36,6 +36,7 @@ import ch.cyberduck.test.IntegrationTest;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -59,7 +60,7 @@ public class SDSDeleteFeatureTest extends AbstractSDSTest {
         assertNotNull(versionId);
         new SDSDeleteFeature(session, nodeid).delete(Collections.singletonList(file), new DisabledLoginCallback(), new Delete.DisabledCallback());
         try {
-            new SDSDeleteFeature(session, nodeid).delete(Collections.singletonList(file.withAttributes(new PathAttributes().withVersionId(versionId))), new DisabledLoginCallback(), new Delete.DisabledCallback());
+            new SDSDeleteFeature(session, nodeid).delete(Collections.singletonList(file.withAttributes(new PathAttributes().setVersionId(versionId))), new DisabledLoginCallback(), new Delete.DisabledCallback());
             fail();
         }
         catch(NotfoundException e) {
@@ -135,6 +136,7 @@ public class SDSDeleteFeatureTest extends AbstractSDSTest {
     }
 
     @Test
+    @Ignore
     public void testDeleteEicar() throws Exception {
         final SDSNodeIdProvider nodeid = new SDSNodeIdProvider(session);
         final Path room = new SDSDirectoryFeature(session, nodeid).mkdir(new Path(

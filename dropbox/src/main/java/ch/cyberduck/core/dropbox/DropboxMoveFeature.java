@@ -59,7 +59,7 @@ public class DropboxMoveFeature implements Move {
                 }
             }
             final RelocationResult result = new DbxUserFilesRequests(session.getClient(file)).moveV2(containerService.getKey(file), containerService.getKey(renamed));
-            return renamed.withAttributes(new DropboxAttributesFinderFeature(session).toAttributes(result.getMetadata()));
+            return new Path(renamed).withAttributes(new DropboxAttributesFinderFeature(session).toAttributes(result.getMetadata()));
         }
         catch(DbxException e) {
             throw new DropboxExceptionMappingService().map("Cannot move {0}", e, file);
@@ -77,6 +77,9 @@ public class DropboxMoveFeature implements Move {
             final Path target = optional.get();
             if(!DropboxTouchFeature.validate(target.getName())) {
                 throw new InvalidFilenameException(MessageFormat.format(LocaleFactory.localizedString("Cannot create {0}", "Error"), target.getName())).withFile(source);
+            }
+            if(new CaseInsensitivePathPredicate(source).test(target)) {
+                throw new InvalidFilenameException(MessageFormat.format(LocaleFactory.localizedString("Cannot rename {0}", "Error"), source.getName())).withFile(source);
             }
         }
     }

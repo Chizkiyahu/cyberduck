@@ -29,7 +29,7 @@ import ch.cyberduck.core.SimplePathPredicate;
 import ch.cyberduck.core.URIEncoder;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.NotfoundException;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
@@ -51,7 +51,7 @@ public class S3ObjectListService extends S3AbstractListService implements ListSe
     private final boolean metadata;
 
     public S3ObjectListService(final S3Session session, final S3AccessControlListFeature acl) {
-        this(session, acl, new HostPreferences(session.getHost()).getBoolean("s3.listing.metadata.enable"));
+        this(session, acl, HostPreferencesFactory.get(session.getHost()).getBoolean("s3.listing.metadata.enable"));
     }
 
     public S3ObjectListService(final S3Session session, final S3AccessControlListFeature acl, final boolean metadata) {
@@ -68,7 +68,7 @@ public class S3ObjectListService extends S3AbstractListService implements ListSe
     }
 
     protected AttributedList<Path> list(final Path directory, final ListProgressListener listener, final String delimiter) throws BackgroundException {
-        return this.list(directory, listener, delimiter, new HostPreferences(session.getHost()).getInteger("s3.listing.chunksize"));
+        return this.list(directory, listener, delimiter, HostPreferencesFactory.get(session.getHost()).getInteger("s3.listing.chunksize"));
     }
 
     protected AttributedList<Path> list(final Path directory, final ListProgressListener listener, final String delimiter, final int chunksize) throws BackgroundException {
@@ -84,7 +84,7 @@ public class S3ObjectListService extends S3AbstractListService implements ListSe
             final AttributedList<Path> objects = new AttributedList<>();
             // Null if listing is complete
             String priorLastKey = null;
-            boolean hasDirectoryPlaceholder = bucket.isRoot() || containerService.isContainer(directory);
+            boolean hasDirectoryPlaceholder = directory.isRoot() || containerService.isContainer(directory);
             do {
                 // Read directory listing in chunks. List results are always returned
                 // in lexicographic (alphabetical) order.
@@ -143,19 +143,15 @@ public class S3ObjectListService extends S3AbstractListService implements ListSe
             if(!hasDirectoryPlaceholder && objects.isEmpty()) {
                 // Only for AWS
                 if(S3Session.isAwsHostname(session.getHost().getHostname())) {
-                    if(StringUtils.isEmpty(RequestEntityRestStorageService.findBucketInHostname(session.getHost()))) {
-                        log.warn("No placeholder found for directory {}", directory);
-                        throw new NotfoundException(directory.getAbsolute());
-                    }
+                    log.warn("No placeholder found for directory {}", directory);
+                    throw new NotfoundException(directory.getAbsolute());
                 }
-                else {
-                    // Handle missing prefix for directory placeholders in Minio
-                    final StorageObjectsChunk chunk = session.getClient().listObjectsChunked(
-                            bucket.isRoot() ? StringUtils.EMPTY : bucket.getName(),
-                            String.format("%s%s", this.createPrefix(directory.getParent()), directory.getName()), delimiter, 1, null);
-                    if(Arrays.stream(chunk.getCommonPrefixes()).map(URIEncoder::decode).noneMatch(common -> common.equals(prefix))) {
-                        throw new NotfoundException(directory.getAbsolute());
-                    }
+                // Handle missing prefix for directory placeholders in Minio
+                final StorageObjectsChunk chunk = session.getClient().listObjectsChunked(
+                        bucket.isRoot() ? StringUtils.EMPTY : bucket.getName(),
+                        String.format("%s%s", this.createPrefix(directory.getParent()), directory.getName()), delimiter, 1, null);
+                if(Arrays.stream(chunk.getCommonPrefixes()).map(URIEncoder::decode).noneMatch(common -> common.equals(prefix))) {
+                    throw new NotfoundException(directory.getAbsolute());
                 }
             }
             return objects;

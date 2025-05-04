@@ -19,10 +19,12 @@ import ch.cyberduck.core.DisabledListProgressListener;
 import ch.cyberduck.core.ListProgressListener;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.exception.BackgroundException;
+import ch.cyberduck.core.exception.NotfoundException;
 
 /**
  * Check for existence of file or folder on server
  */
+@Optional
 public interface Find {
 
     default boolean find(Path file) throws BackgroundException {
@@ -34,6 +36,7 @@ public interface Find {
      *
      * @param file     File or folder
      * @param listener Will optionally be invoked by implementation if directory listing is retrieved
+     * @throws NotfoundException Parent directory not found
      */
     boolean find(Path file, ListProgressListener listener) throws BackgroundException;
 }

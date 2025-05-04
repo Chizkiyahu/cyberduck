@@ -30,6 +30,8 @@ import ch.cyberduck.core.features.Write;
 import ch.cyberduck.core.transfer.TransferStatus;
 
 import org.apache.commons.io.input.NullInputStream;
+import org.apache.commons.lang3.RegExUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import java.net.URISyntaxException;
 import java.text.MessageFormat;
@@ -70,7 +72,7 @@ public class AzureDirectoryFeature implements Directory<Void> {
                 final EnumSet<Path.Type> type = EnumSet.copyOf(folder.getType());
                 type.add(Path.Type.placeholder);
                 return new AzureTouchFeature(session, context).withWriter(writer).touch(folder.withType(type),
-                        status.withChecksum(writer.checksum(folder, status).compute(new NullInputStream(0L), status)));
+                        status.setChecksum(writer.checksum(folder, status).compute(new NullInputStream(0L), status)));
             }
         }
         catch(URISyntaxException e) {
@@ -84,10 +86,28 @@ public class AzureDirectoryFeature implements Directory<Void> {
     @Override
     public void preflight(final Path workdir, final String filename) throws BackgroundException {
         if(workdir.isRoot()) {
-            if(!AzureTouchFeature.validate(filename)) {
+            if(!validate(filename)) {
                 throw new InvalidFilenameException(MessageFormat.format(LocaleFactory.localizedString("Cannot create folder {0}", "Error"), filename));
             }
         }
+    }
+
+    public static boolean validate(final String filename) {
+        // Empty argument if not known in validation
+        if(StringUtils.isNotBlank(filename)) {
+            // Container names must be lowercase, between 3-63 characters long and must start with a letter or
+            // number. Container names may contain only letters, numbers, and the dash (-) character.
+            if(StringUtils.length(filename) > 63) {
+                return false;
+            }
+            if(StringUtils.length(filename) < 3) {
+                return false;
+            }
+            if(!StringUtils.isAlphanumeric(RegExUtils.removeAll(filename, "-"))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override

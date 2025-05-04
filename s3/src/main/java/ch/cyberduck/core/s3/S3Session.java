@@ -46,7 +46,7 @@ import ch.cyberduck.core.kms.KMSEncryptionFeature;
 import ch.cyberduck.core.oauth.OAuth2AuthorizationService;
 import ch.cyberduck.core.oauth.OAuth2RequestInterceptor;
 import ch.cyberduck.core.preferences.HostPreferences;
-import ch.cyberduck.core.preferences.PreferencesReader;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.restore.Glacier;
 import ch.cyberduck.core.shared.DefaultPathHomeFeature;
@@ -100,8 +100,8 @@ import static com.amazonaws.services.s3.Headers.*;
 public class S3Session extends HttpSession<RequestEntityRestStorageService> {
     private static final Logger log = LogManager.getLogger(S3Session.class);
 
-    private final PreferencesReader preferences
-            = new HostPreferences(host);
+    private final HostPreferences preferences
+            = HostPreferencesFactory.get(host);
 
     private final S3AccessControlListFeature acl = new S3AccessControlListFeature(this);
 
@@ -158,6 +158,10 @@ public class S3Session extends HttpSession<RequestEntityRestStorageService> {
 
     protected XmlResponsesSaxParser getXmlResponseSaxParser() throws ServiceException {
         return new XmlResponsesSaxParser(client.getConfiguration(), false);
+    }
+
+    public S3CredentialsStrategy getAuthentication() {
+        return authentication;
     }
 
     /**
@@ -265,7 +269,7 @@ public class S3Session extends HttpSession<RequestEntityRestStorageService> {
     protected S3CredentialsStrategy configureCredentialsStrategy(final ProxyFinder proxy, final HttpClientBuilder configuration,
                                                                  final LoginCallback prompt) throws LoginCanceledException {
         if(host.getProtocol().isOAuthConfigurable()) {
-            final OAuth2RequestInterceptor oauth = new OAuth2RequestInterceptor(builder.build(proxy, this, prompt).build(), host, prompt)
+            final OAuth2RequestInterceptor oauth = new OAuth2RequestInterceptor(configuration.build(), host, prompt)
                     .withRedirectUri(host.getProtocol().getOAuthRedirectUrl());
             if(host.getProtocol().getAuthorization() != null) {
                 oauth.withFlowType(OAuth2AuthorizationService.FlowType.valueOf(host.getProtocol().getAuthorization()));
@@ -289,21 +293,18 @@ public class S3Session extends HttpSession<RequestEntityRestStorageService> {
                     );
                 }
                 else {
+                    final Credentials credentials = new S3CredentialsConfigurator(
+                            new ThreadLocalHostnameDelegatingTrustManager(trust, host.getHostname()), key, prompt).reload().configure(host);
                     // Fetch temporary session token from AWS CLI configuration
-                    interceptor = new S3AuthenticationResponseInterceptor(this, new S3CredentialsStrategy() {
-                        @Override
-                        public Credentials get() throws LoginCanceledException {
-                            return new S3CredentialsConfigurator(
-                                    new ThreadLocalHostnameDelegatingTrustManager(trust, host.getHostname()), key, prompt).reload().configure(host);
-                        }
-                    });
+                    interceptor = new S3AuthenticationResponseInterceptor(this, () -> credentials);
                 }
                 configuration.setServiceUnavailableRetryStrategy(new CustomServiceUnavailableRetryStrategy(host,
                         new ExecutionCountServiceUnavailableRetryStrategy(interceptor)));
                 return interceptor;
             }
             else {
-                return host::getCredentials;
+                final Credentials credentials = new Credentials(host.getCredentials());
+                return () -> credentials;
             }
         }
     }
@@ -312,66 +313,55 @@ public class S3Session extends HttpSession<RequestEntityRestStorageService> {
     public void login(final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
         final Credentials credentials = authentication.get();
         if(credentials.isAnonymousLogin()) {
-            log.debug("Connect with no credentials to {}", host);
+            log.debug("Connect non-authenticated with no credentials for {}", host);
             client.setProviderCredentials(null);
         }
         else {
             if(credentials.getTokens().validate()) {
-                log.debug("Connect with session credentials to {}", host);
+                log.debug("Connect with session token for {}", host);
                 client.setProviderCredentials(new AWSSessionCredentials(
                         credentials.getTokens().getAccessKeyId(), credentials.getTokens().getSecretAccessKey(),
                         credentials.getTokens().getSessionToken()));
             }
             else {
-                log.debug("Connect with basic credentials to {}", host);
+                log.debug("Connect with static keys for {}", host);
                 client.setProviderCredentials(new AWSCredentials(credentials.getUsername(), credentials.getPassword()));
             }
-        }
-        if(host.getCredentials().isPassed()) {
-            log.warn("Skip verifying credentials with previous successful authentication event for {}", this);
-            return;
         }
         final Path home = new DelegatingHomeFeature(new DefaultPathHomeFeature(host)).find();
         if(S3Session.isAwsHostname(host.getHostname(), false)) {
             if(StringUtils.isEmpty(RequestEntityRestStorageService.findBucketInHostname(host))) {
-                final CustomClientConfiguration configuration = new CustomClientConfiguration(host,
-                        new ThreadLocalHostnameDelegatingTrustManager(trust, host.getHostname()), key);
-                final AWSSecurityTokenServiceClientBuilder builder = AWSSecurityTokenServiceClientBuilder.standard()
-                        .withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(host.getProtocol().getSTSEndpoint(), null))
-                        .withCredentials(AWSCredentialsConfigurator.toAWSCredentialsProvider(client.getProviderCredentials()))
-                        .withClientConfiguration(configuration);
-                final AWSSecurityTokenService service = builder.build();
-                // Returns details about the IAM user or role whose credentials are used to call the operation.
-                // No permissions are required to perform this operation.
-                try {
-                    final GetCallerIdentityResult identity = service.getCallerIdentity(new GetCallerIdentityRequest());
-                    log.debug("Successfully verified credentials for {}", identity);
-                }
-                catch(AWSSecurityTokenServiceException e) {
-                    throw new STSExceptionMappingService().map(e);
-                }
-            }
-            else {
-                final Location.Name location = new S3LocationFeature(this, regions).getLocation(home);
-                log.debug("Retrieved region {}", location);
-                if(!Location.unknown.equals(location)) {
-                    log.debug("Set default region to {} determined from {}", location, home);
-                    host.setProperty("s3.location", location.getIdentifier());
+                if(client.isAuthenticatedConnection()) {
+                    final CustomClientConfiguration configuration = new CustomClientConfiguration(host,
+                            new ThreadLocalHostnameDelegatingTrustManager(trust, host.getHostname()), key);
+                    final AWSSecurityTokenServiceClientBuilder builder = AWSSecurityTokenServiceClientBuilder.standard()
+                            .withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(host.getProtocol().getSTSEndpoint(), null))
+                            .withCredentials(AWSCredentialsConfigurator.toAWSCredentialsProvider(client.getProviderCredentials()))
+                            .withClientConfiguration(configuration);
+                    final AWSSecurityTokenService service = builder.build();
+                    // Returns details about the IAM user or role whose credentials are used to call the operation.
+                    // No permissions are required to perform this operation.
+                    try {
+                        final GetCallerIdentityResult identity = service.getCallerIdentity(new GetCallerIdentityRequest());
+                        log.debug("Successfully verified credentials for {}", identity);
+                        return;
+                    }
+                    catch(AWSSecurityTokenServiceException e) {
+                        throw new STSExceptionMappingService().map(e);
+                    }
                 }
             }
         }
+        if(home.isRoot() && StringUtils.isEmpty(RequestEntityRestStorageService.findBucketInHostname(host))) {
+            log.debug("Skip querying region for {}", home);
+            new S3ListService(this, acl).list(home, new DisabledListProgressListener());
+        }
         else {
-            if(home.isRoot() && StringUtils.isEmpty(RequestEntityRestStorageService.findBucketInHostname(host))) {
-                log.debug("Skip querying region for {}", home);
-                new S3ListService(this, acl).list(home, new DisabledListProgressListener());
-            }
-            else {
-                final Location.Name location = new S3LocationFeature(this, regions).getLocation(home);
-                log.debug("Retrieved region {}", location);
-                if(!Location.unknown.equals(location)) {
-                    log.debug("Set default region to {} determined from {}", location, home);
-                    host.setProperty("s3.location", location.getIdentifier());
-                }
+            final Location.Name location = new S3LocationFeature(this, regions).getLocation(home);
+            log.debug("Retrieved region {}", location);
+            if(!Location.unknown.equals(location)) {
+                log.debug("Set default region to {} determined from {}", location, home);
+                preferences.setProperty("s3.location", location.getIdentifier());
             }
         }
     }
@@ -495,7 +485,7 @@ public class S3Session extends HttpSession<RequestEntityRestStorageService> {
             return (T) new S3SearchFeature(this, acl);
         }
         if(type == Scheduler.class) {
-            if(new HostPreferences(host).getBoolean("s3.cloudfront.preload.enable")) {
+            if(preferences.getBoolean("s3.cloudfront.preload.enable")) {
                 return (T) scheduler;
             }
         }

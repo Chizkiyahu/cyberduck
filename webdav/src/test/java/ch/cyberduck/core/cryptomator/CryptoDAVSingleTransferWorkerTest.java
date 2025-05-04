@@ -20,7 +20,6 @@ import ch.cyberduck.core.Credentials;
 import ch.cyberduck.core.DisabledConnectionCallback;
 import ch.cyberduck.core.DisabledLoginCallback;
 import ch.cyberduck.core.DisabledPasswordCallback;
-import ch.cyberduck.core.DisabledPasswordStore;
 import ch.cyberduck.core.DisabledProgressListener;
 import ch.cyberduck.core.Host;
 import ch.cyberduck.core.Local;
@@ -105,7 +104,7 @@ public class CryptoDAVSingleTransferWorkerTest extends AbstractDAVTest {
         out2.close();
         final CryptoVault cryptomator = new CryptoVault(vault);
         cryptomator.create(session, new VaultCredentials("test"), vaultVersion);
-        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordStore(), new DisabledPasswordCallback() {
+        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordCallback() {
             @Override
             public Credentials prompt(final Host bookmark, final String title, final String reason, final LoginOptions options) {
                 return new VaultCredentials("test");
@@ -126,14 +125,14 @@ public class CryptoDAVSingleTransferWorkerTest extends AbstractDAVTest {
         assertEquals(content.length, cryptomator.getFeature(session, AttributesFinder.class, new DAVAttributesFinderFeature(session)).find(file1).getSize());
         {
             final ByteArrayOutputStream buffer = new ByteArrayOutputStream(content.length);
-            final InputStream in = new CryptoReadFeature(session, new DAVReadFeature(session), cryptomator).read(file1, new TransferStatus().withLength(content.length), new DisabledConnectionCallback());
+            final InputStream in = new CryptoReadFeature(session, new DAVReadFeature(session), cryptomator).read(file1, new TransferStatus().setLength(content.length), new DisabledConnectionCallback());
             new StreamCopier(new TransferStatus(), new TransferStatus()).transfer(in, buffer);
             assertArrayEquals(content, buffer.toByteArray());
         }
         assertEquals(content.length, cryptomator.getFeature(session, AttributesFinder.class, new DAVAttributesFinderFeature(session)).find(file2).getSize());
         {
             final ByteArrayOutputStream buffer = new ByteArrayOutputStream(content.length);
-            final InputStream in = new CryptoReadFeature(session, new DAVReadFeature(session), cryptomator).read(file1, new TransferStatus().withLength(content.length), new DisabledConnectionCallback());
+            final InputStream in = new CryptoReadFeature(session, new DAVReadFeature(session), cryptomator).read(file1, new TransferStatus().setLength(content.length), new DisabledConnectionCallback());
             new StreamCopier(new TransferStatus(), new TransferStatus()).transfer(in, buffer);
             assertArrayEquals(content, buffer.toByteArray());
         }
@@ -151,7 +150,7 @@ public class CryptoDAVSingleTransferWorkerTest extends AbstractDAVTest {
         final Path vault = new Path(home, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory));
         final CryptoVault cryptomator = new CryptoVault(vault);
         cryptomator.create(session, new VaultCredentials("test"), vaultVersion);
-        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordStore(), new DisabledPasswordCallback() {
+        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordCallback() {
             @Override
             public Credentials prompt(final Host bookmark, final String title, final String reason, final LoginOptions options) {
                 return new VaultCredentials("test");

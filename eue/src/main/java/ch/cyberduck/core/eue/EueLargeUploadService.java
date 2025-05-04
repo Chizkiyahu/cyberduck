@@ -32,7 +32,7 @@ import ch.cyberduck.core.http.HttpUploadFeature;
 import ch.cyberduck.core.io.BandwidthThrottle;
 import ch.cyberduck.core.io.HashAlgorithm;
 import ch.cyberduck.core.io.StreamListener;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.threading.BackgroundExceptionCallable;
 import ch.cyberduck.core.threading.ThreadPool;
 import ch.cyberduck.core.threading.ThreadPoolFactory;
@@ -67,8 +67,8 @@ public class EueLargeUploadService extends HttpUploadFeature<EueWriteFeature.Chu
     private Write<EueWriteFeature.Chunk> writer;
 
     public EueLargeUploadService(final EueSession session, final EueResourceIdProvider fileid, final Write<EueWriteFeature.Chunk> writer) {
-        this(session, fileid, writer, new HostPreferences(session.getHost()).getLong("eue.upload.multipart.size"),
-                new HostPreferences(session.getHost()).getInteger("eue.upload.multipart.concurrency"));
+        this(session, fileid, writer, HostPreferencesFactory.get(session.getHost()).getLong("eue.upload.multipart.size"),
+                HostPreferencesFactory.get(session.getHost()).getInteger("eue.upload.multipart.concurrency"));
     }
 
     public EueLargeUploadService(final EueSession session, final EueResourceIdProvider fileid, final Write<EueWriteFeature.Chunk> writer, final Long chunksize, final Integer concurrency) {
@@ -137,7 +137,7 @@ public class EueLargeUploadService extends HttpUploadFeature<EueWriteFeature.Chu
             }
             final EueWriteFeature.Chunk object = new EueWriteFeature.Chunk(resourceId, size, cdash64);
             // Mark parent status as complete
-            status.withResponse(new EueAttributesAdapter().toAttributes(object)).setComplete();
+            status.setResponse(new EueAttributesAdapter().toAttributes(object)).setComplete();
             return object;
         }
         catch(NoSuchAlgorithmException e) {
@@ -162,10 +162,10 @@ public class EueLargeUploadService extends HttpUploadFeature<EueWriteFeature.Chu
                 final Map<String, String> parameters = new HashMap<>();
                 parameters.put(EueWriteFeature.RESOURCE_ID, resourceId);
                 final TransferStatus status = new TransferStatus()
-                        .segment(true)
-                        .withOffset(offset)
-                        .withLength(length)
-                        .withParameters(parameters);
+                        .setSegment(true)
+                        .setOffset(offset)
+                        .setLength(length)
+                        .setParameters(parameters);
                 status.setPart(partNumber);
                 status.setHeader(overall.getHeader());
                 status.setChecksum(writer.checksum(file, status).compute(local.getInputStream(), status));

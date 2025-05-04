@@ -23,7 +23,7 @@ import ch.cyberduck.core.VersioningConfiguration;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.UnsupportedException;
 import ch.cyberduck.core.features.Versioning;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.sds.io.swagger.client.ApiException;
 import ch.cyberduck.core.sds.io.swagger.client.api.NodesApi;
 import ch.cyberduck.core.sds.io.swagger.client.model.DeletedNode;
@@ -60,9 +60,9 @@ public class SDSVersioningFeature implements Versioning {
             new NodesApi(session.getClient()).restoreNodes(
                     new RestoreDeletedNodesRequest()
                             .resolutionStrategy(RestoreDeletedNodesRequest.ResolutionStrategyEnum.OVERWRITE)
-                            .keepShareLinks(new HostPreferences(session.getHost()).getBoolean("sds.upload.sharelinks.keep"))
+                            .keepShareLinks(HostPreferencesFactory.get(session.getHost()).getBoolean("sds.upload.sharelinks.keep"))
                             .addDeletedNodeIdsItem(Long.parseLong(nodeid.getVersionId(file)))
-                            .parentId(Long.parseLong(nodeid.getVersionId(file.getParent()))), StringUtils.EMPTY);
+                            .parentId(Long.parseLong(nodeid.getVersionId(file.getParent()))), StringUtils.EMPTY);//todo
         }
         catch(ApiException e) {
             throw new SDSExceptionMappingService(nodeid).map("Failure to write attributes of {0}", e, file);
@@ -75,16 +75,17 @@ public class SDSVersioningFeature implements Versioning {
         if(file.isDirectory()) {
             return AttributedList.emptyList();
         }
-        final int chunksize = new HostPreferences(session.getHost()).getInteger("sds.listing.chunksize");
+        final int chunksize = HostPreferencesFactory.get(session.getHost()).getInteger("sds.listing.chunksize");
         try {
             int offset = 0;
             DeletedNodeVersionsList nodes;
             final AttributedList<Path> versions = new AttributedList<>();
             do {
-                nodes = new NodesApi(session.getClient()).requestDeletedNodeVersions(
+                final int range = offset;
+                nodes = nodeid.retry(file.getParent(), () -> new NodesApi(session.getClient()).requestDeletedNodeVersions(
                         Long.parseLong(nodeid.getVersionId(file.getParent())),
                         file.isFile() ? "file" : "folder", file.getName(), StringUtils.EMPTY, "updatedAt:desc",
-                        offset, chunksize, null);
+                        range, chunksize, null));
                 for(DeletedNode item : nodes.getItems()) {
                     versions.add(new Path(file.getParent(), file.getName(), file.getType(),
                             new SDSAttributesAdapter(session).toAttributes(item)));

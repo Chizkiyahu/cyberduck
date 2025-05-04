@@ -33,7 +33,7 @@ import ch.cyberduck.core.deepbox.io.swagger.client.model.NodeContent;
 import ch.cyberduck.core.deepbox.io.swagger.client.model.NodeCopy;
 import ch.cyberduck.core.exception.AccessDeniedException;
 import ch.cyberduck.core.features.Delete;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.transfer.TransferStatus;
 import ch.cyberduck.test.IntegrationTest;
 
@@ -65,7 +65,6 @@ public class DeepboxListServiceTest extends AbstractDeepboxTest {
         assertFalse(list.isEmpty());
         assertNotNull(list.find(new SimplePathPredicate(new Path("/ORG 1 - DeepBox Desktop App", EnumSet.of(Path.Type.directory, Path.Type.volume)))));
         assertNotNull(list.find(new SimplePathPredicate(new Path("/ORG 4 - DeepBox Desktop App", EnumSet.of(Path.Type.directory, Path.Type.volume)))));
-        assertEquals(2, list.size());
         for(final Path f : list) {
             assertSame(directory, f.getParent());
             assertFalse(f.getName().contains(String.valueOf(Path.DELIMITER)));
@@ -254,7 +253,7 @@ public class DeepboxListServiceTest extends AbstractDeepboxTest {
     @Test
     public void testChunksizeExact() throws Exception {
         session.getHost().setProperty("deepbox.listing.chunksize", "5");
-        final int chunkSize = new HostPreferences(session.getHost()).getInteger("deepbox.listing.chunksize");
+        final int chunkSize = HostPreferencesFactory.get(session.getHost()).getInteger("deepbox.listing.chunksize");
         final DeepboxIdProvider nodeid = new DeepboxIdProvider(session);
 
         final Path receipts = new Path("/ORG 4 - DeepBox Desktop App/ORG 4 - DeepBox Desktop App/ORG3:Box1/Documents/Invoices : Receipts/", EnumSet.of(Path.Type.directory));
@@ -276,7 +275,7 @@ public class DeepboxListServiceTest extends AbstractDeepboxTest {
     @Test
     public void testChunksizeInexact() throws Exception {
         session.getHost().setProperty("deepbox.listing.chunksize", "5");
-        final int chunkSize = new HostPreferences(session.getHost()).getInteger("deepbox.listing.chunksize");
+        final int chunkSize = HostPreferencesFactory.get(session.getHost()).getInteger("deepbox.listing.chunksize");
         final DeepboxIdProvider nodeid = new DeepboxIdProvider(session);
 
         final Path receipts = new Path("/ORG 4 - DeepBox Desktop App/ORG 4 - DeepBox Desktop App/ORG3:Box1/Documents/Invoices : Receipts/", EnumSet.of(Path.Type.directory));

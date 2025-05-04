@@ -15,7 +15,20 @@ package ch.cyberduck.core.cryptomator;
  * GNU General Public License for more details.
  */
 
-import ch.cyberduck.core.*;
+import ch.cyberduck.core.AlphanumericRandomStringService;
+import ch.cyberduck.core.Credentials;
+import ch.cyberduck.core.DisabledCancelCallback;
+import ch.cyberduck.core.DisabledConnectionCallback;
+import ch.cyberduck.core.DisabledHostKeyCallback;
+import ch.cyberduck.core.DisabledLoginCallback;
+import ch.cyberduck.core.DisabledPasswordCallback;
+import ch.cyberduck.core.DisabledProgressListener;
+import ch.cyberduck.core.Host;
+import ch.cyberduck.core.Local;
+import ch.cyberduck.core.LoginOptions;
+import ch.cyberduck.core.NullFilter;
+import ch.cyberduck.core.Path;
+import ch.cyberduck.core.TestProtocol;
 import ch.cyberduck.core.cryptomator.features.CryptoReadFeature;
 import ch.cyberduck.core.features.AttributesFinder;
 import ch.cyberduck.core.features.Delete;
@@ -102,7 +115,7 @@ public class CryptoLocalSingleTransferWorkerTest {
         out2.close();
         final CryptoVault cryptomator = new CryptoVault(vault);
         cryptomator.create(session, new VaultCredentials("test"), vaultVersion);
-        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordStore(), new DisabledPasswordCallback() {
+        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordCallback() {
             @Override
             public Credentials prompt(final Host bookmark, final String title, final String reason, final LoginOptions options) {
                 return new VaultCredentials("test");
@@ -123,14 +136,14 @@ public class CryptoLocalSingleTransferWorkerTest {
         assertEquals(content.length, cryptomator.getFeature(session, AttributesFinder.class, new LocalAttributesFinderFeature(session)).find(file1).getSize());
         {
             final ByteArrayOutputStream buffer = new ByteArrayOutputStream(content.length);
-            final InputStream in = new CryptoReadFeature(session, new LocalReadFeature(session), cryptomator).read(file1, new TransferStatus().withLength(content.length), new DisabledConnectionCallback());
+            final InputStream in = new CryptoReadFeature(session, new LocalReadFeature(session), cryptomator).read(file1, new TransferStatus().setLength(content.length), new DisabledConnectionCallback());
             new StreamCopier(new TransferStatus(), new TransferStatus()).transfer(in, buffer);
             assertArrayEquals(content, buffer.toByteArray());
         }
         assertEquals(content.length, cryptomator.getFeature(session, AttributesFinder.class, new LocalAttributesFinderFeature(session)).find(file2).getSize());
         {
             final ByteArrayOutputStream buffer = new ByteArrayOutputStream(content.length);
-            final InputStream in = new CryptoReadFeature(session, new LocalReadFeature(session), cryptomator).read(file1, new TransferStatus().withLength(content.length), new DisabledConnectionCallback());
+            final InputStream in = new CryptoReadFeature(session, new LocalReadFeature(session), cryptomator).read(file1, new TransferStatus().setLength(content.length), new DisabledConnectionCallback());
             new StreamCopier(new TransferStatus(), new TransferStatus()).transfer(in, buffer);
             assertArrayEquals(content, buffer.toByteArray());
         }

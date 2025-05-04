@@ -19,10 +19,16 @@ package ch.cyberduck.core;
 
 import ch.cyberduck.core.exception.AccessDeniedException;
 import ch.cyberduck.core.exception.BackgroundException;
+import ch.cyberduck.core.features.Required;
 
 import java.text.MessageFormat;
 
+@Required
 public interface ListService {
+    default AttributedList<Path> list(Path directory) throws BackgroundException {
+        return this.list(directory, new DisabledListProgressListener());
+    }
+
     AttributedList<Path> list(Path directory, ListProgressListener listener) throws BackgroundException;
 
     default void preflight(final Path directory) throws BackgroundException {

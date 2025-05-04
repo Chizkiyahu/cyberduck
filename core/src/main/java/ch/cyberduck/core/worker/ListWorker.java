@@ -19,14 +19,13 @@ package ch.cyberduck.core.worker;
 
 import ch.cyberduck.core.AttributedList;
 import ch.cyberduck.core.Cache;
+import ch.cyberduck.core.CachingListProgressListener;
 import ch.cyberduck.core.ListProgressListener;
 import ch.cyberduck.core.ListService;
 import ch.cyberduck.core.LocaleFactory;
 import ch.cyberduck.core.Path;
-import ch.cyberduck.core.ProxyListProgressListener;
 import ch.cyberduck.core.Session;
 import ch.cyberduck.core.exception.BackgroundException;
-import ch.cyberduck.core.exception.ConnectionCanceledException;
 import ch.cyberduck.core.exception.ListCanceledException;
 
 import org.apache.logging.log4j.LogManager;
@@ -46,7 +45,7 @@ public class ListWorker extends Worker<AttributedList<Path>> {
     public ListWorker(final Cache<Path> cache, final Path directory, final ListProgressListener listener) {
         this.cache = cache;
         this.directory = directory;
-        this.listener = new ConnectionCancelListProgressListener(this, directory, listener);
+        this.listener = new WorkerCanceledListProgressListener(this, new CachingListProgressListener(cache, listener));
     }
 
     @Override
@@ -55,6 +54,7 @@ public class ListWorker extends Worker<AttributedList<Path>> {
             final AttributedList<Path> list;
             listener.reset();
             if(this.isCached()) {
+                log.debug("Lookup cached contents for {}", directory);
                 list = cache.get(directory);
                 listener.chunk(directory, list);
             }
@@ -63,22 +63,15 @@ public class ListWorker extends Worker<AttributedList<Path>> {
                 log.debug("Run with feature {}", service);
                 list = service.list(directory, listener);
                 if(list.isEmpty()) {
+                    log.debug("Notify listener {} with chunk for {}", listener, directory);
                     listener.chunk(directory, list);
                 }
-                log.debug("Notify listener {}", listener);
             }
-            listener.finish(directory, list, Optional.empty());
             return list;
         }
         catch(ListCanceledException e) {
             log.warn("Return partial directory listing for {}", directory);
-            listener.finish(directory, e.getChunk(), Optional.of(e));
             return e.getChunk();
-        }
-        catch(BackgroundException e) {
-            log.warn("Notify listener for {} with error {}", directory, e);
-            listener.finish(directory, AttributedList.emptyList(), Optional.of(e));
-            throw e;
         }
     }
 
@@ -87,16 +80,10 @@ public class ListWorker extends Worker<AttributedList<Path>> {
     }
 
     @Override
-    public void cleanup(final AttributedList<Path> list) {
-        // Do not cache results from a canceled list worker as it may be incomplete
-        if(this.isCanceled()) {
-            return;
-        }
-        // Update the working directory if listing is successful
-        if(!(AttributedList.<Path>emptyList() == list)) {
-            // Cache directory listing
-            cache.put(directory, list);
-        }
+    public void cleanup(final AttributedList<Path> list, final BackgroundException failure) {
+        log.debug("Run cleanup for listener {} with list {} and failure {}", listener, list, failure);
+        listener.cleanup(directory, list, Optional.ofNullable(failure));
+        super.cleanup(list, failure);
     }
 
     @Override
@@ -132,29 +119,9 @@ public class ListWorker extends Worker<AttributedList<Path>> {
 
     @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder("SessionListWorker{");
+        final StringBuilder sb = new StringBuilder("ListWorker{");
         sb.append("directory=").append(directory);
         sb.append('}');
         return sb.toString();
-    }
-
-    private static final class ConnectionCancelListProgressListener extends ProxyListProgressListener {
-        private final Worker worker;
-        private final Path directory;
-
-        public ConnectionCancelListProgressListener(final Worker worker, final Path directory, final ListProgressListener proxy) {
-            super(proxy);
-            this.worker = worker;
-            this.directory = directory;
-        }
-
-        @Override
-        public void chunk(final Path directory, final AttributedList<Path> list) throws ConnectionCanceledException {
-            log.info("Retrieved chunk of {} items in {}", list.size(), this.directory);
-            if(worker.isCanceled()) {
-                throw new ListCanceledException(list);
-            }
-            super.chunk(this.directory, list);
-        }
     }
 }

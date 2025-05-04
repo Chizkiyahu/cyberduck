@@ -38,7 +38,7 @@ import ch.cyberduck.core.features.Share;
 import ch.cyberduck.core.features.Symlink;
 import ch.cyberduck.core.features.Touch;
 import ch.cyberduck.core.features.Versioning;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.preferences.PreferencesFactory;
 import ch.cyberduck.core.resources.IconCacheFactory;
 import ch.cyberduck.core.vault.VaultRegistry;
@@ -361,7 +361,7 @@ public class BrowserToolbarValidator implements ToolbarValidator {
             return this.isBrowser() && controller.isMounted() && controller.getNavigation().getBack().size() > 1;
         }
         else if(action.equals(Foundation.selector("forwardButtonClicked:"))) {
-            return this.isBrowser() && controller.isMounted() && controller.getNavigation().getForward().size() > 0;
+            return this.isBrowser() && controller.isMounted() && !controller.getNavigation().getForward().isEmpty();
         }
         else if(action.equals(Foundation.selector("printDocument:"))) {
             return this.isBrowser() && controller.isMounted();
@@ -424,7 +424,7 @@ public class BrowserToolbarValidator implements ToolbarValidator {
                 final AttributedList<Path> cache = controller.getCache().get(controller.workdir());
                 return null != cache.find(new SimplePathPredicate(Path.Type.file,
                         String.format("%s%s%s", controller.workdir().getAbsolute(), Path.DELIMITER,
-                                new HostPreferences(controller.getSession().getHost()).getProperty("cryptomator.vault.masterkey.filename"))));
+                                HostPreferencesFactory.get(controller.getSession().getHost()).getProperty("cryptomator.vault.masterkey.filename"))));
             }
             return false;
         }

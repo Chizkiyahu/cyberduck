@@ -17,10 +17,21 @@ package ch.cyberduck.core.s3;
  * Bug fixes, suggestions and comments should be sent to feedback@cyberduck.ch
  */
 
-import ch.cyberduck.core.*;
+import ch.cyberduck.core.DescriptiveUrl;
+import ch.cyberduck.core.DescriptiveUrlBag;
+import ch.cyberduck.core.HostWebUrlProvider;
+import ch.cyberduck.core.LocaleFactory;
+import ch.cyberduck.core.Path;
+import ch.cyberduck.core.PathContainerService;
+import ch.cyberduck.core.Scheme;
+import ch.cyberduck.core.SimplePathPredicate;
+import ch.cyberduck.core.URIEncoder;
+import ch.cyberduck.core.UrlProvider;
+import ch.cyberduck.core.UserDateFormatterFactory;
 import ch.cyberduck.core.cdn.Distribution;
 import ch.cyberduck.core.cdn.DistributionUrlProvider;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.exception.BackgroundException;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.shared.DefaultUrlProvider;
 
 import org.apache.commons.lang3.StringUtils;
@@ -45,23 +56,17 @@ public class S3UrlProvider implements UrlProvider {
     private final S3Session session;
     private final PathContainerService containerService;
     private final Map<Path, Set<Distribution>> distributions;
-    private final HostPasswordStore store;
 
     public S3UrlProvider(final S3Session session, final Map<Path, Set<Distribution>> distributions) {
-        this(session, distributions, PasswordStoreFactory.get());
-    }
-
-    public S3UrlProvider(final S3Session session, final Map<Path, Set<Distribution>> distributions, final HostPasswordStore store) {
         this.session = session;
         this.distributions = distributions;
-        this.store = store;
         this.containerService = session.getFeature(PathContainerService.class);
     }
 
     @Override
     public DescriptiveUrlBag toUrl(final Path file, final EnumSet<DescriptiveUrl.Type> types) {
         final DescriptiveUrlBag list = new DescriptiveUrlBag();
-        if(new HostPreferences(session.getHost()).getBoolean("s3.bucket.virtualhost.disable")) {
+        if(HostPreferencesFactory.get(session.getHost()).getBoolean("s3.bucket.virtualhost.disable")) {
             list.addAll(new DefaultUrlProvider(session.getHost()).toUrl(file, types));
         }
         else {
@@ -83,7 +88,7 @@ public class S3UrlProvider implements UrlProvider {
                     list.add(this.toSignedUrl(file, (int) TimeUnit.HOURS.toSeconds(1)));
                     // Default signed URL expiring in 24 hours.
                     list.add(this.toSignedUrl(file, (int) TimeUnit.SECONDS.toSeconds(
-                            new HostPreferences(session.getHost()).getInteger("s3.url.expire.seconds"))));
+                            HostPreferencesFactory.get(session.getHost()).getInteger("s3.url.expire.seconds"))));
                     // 1 Week
                     list.add(this.toSignedUrl(file, (int) TimeUnit.DAYS.toSeconds(7)));
                     switch(session.getSignatureVersion()) {
@@ -198,12 +203,12 @@ public class S3UrlProvider implements UrlProvider {
         @Override
         public String getUrl() {
             final String secret;
-            final Credentials credentials = CredentialsConfiguratorFactory.get(session.getHost().getProtocol()).configure(session.getHost());
-            if(credentials.isPasswordAuthentication()) {
-                secret = credentials.getPassword();
+            try {
+                secret = session.getAuthentication().get().getPassword();
             }
-            else {
-                secret = store.findLoginPassword(session.getHost());
+            catch(BackgroundException e) {
+                log.error("Failure retrieving secret required to sign temporary URL", e);
+                return DescriptiveUrl.EMPTY.getUrl();
             }
             if(StringUtils.isBlank(secret)) {
                 log.error("No secret found in password store required to sign temporary URL");

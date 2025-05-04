@@ -20,7 +20,6 @@ import ch.cyberduck.core.BytecountStreamListener;
 import ch.cyberduck.core.DisabledConnectionCallback;
 import ch.cyberduck.core.DisabledLoginCallback;
 import ch.cyberduck.core.DisabledPasswordCallback;
-import ch.cyberduck.core.DisabledPasswordStore;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.box.AbstractBoxTest;
 import ch.cyberduck.core.box.BoxDeleteFeature;
@@ -69,7 +68,7 @@ public class BoxWriteFeatureTest extends AbstractBoxTest {
         final Path test = new Path(vault, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
         final CryptoVault cryptomator = new CryptoVault(vault);
         cryptomator.create(session, new VaultCredentials("test"), vaultVersion);
-        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordStore(), new DisabledPasswordCallback(), cryptomator));
+        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordCallback(), cryptomator));
         final CryptoWriteFeature feature = new CryptoWriteFeature<>(session, new BoxWriteFeature(session, fileid), cryptomator);
         final byte[] content = RandomUtils.nextBytes(6 * 1024 * 1024);
         final TransferStatus writeStatus = new TransferStatus();
@@ -87,7 +86,7 @@ public class BoxWriteFeatureTest extends AbstractBoxTest {
         assertNotNull(out.getStatus());
         assertTrue(cryptomator.getFeature(session, Find.class, new BoxFindFeature(session, fileid)).find(test));
         final byte[] compare = new byte[content.length];
-        final InputStream stream = new CryptoReadFeature(session, new BoxReadFeature(session, fileid), cryptomator).read(test, new TransferStatus().withLength(content.length), new DisabledConnectionCallback());
+        final InputStream stream = new CryptoReadFeature(session, new BoxReadFeature(session, fileid), cryptomator).read(test, new TransferStatus().setLength(content.length), new DisabledConnectionCallback());
         IOUtils.readFully(stream, compare);
         stream.close();
         assertArrayEquals(content, compare);
@@ -102,7 +101,7 @@ public class BoxWriteFeatureTest extends AbstractBoxTest {
         final Path test = new Path(vault, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
         final CryptoVault cryptomator = new CryptoVault(vault);
         cryptomator.create(session, new VaultCredentials("test"), vaultVersion);
-        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordStore(), new DisabledPasswordCallback(), cryptomator));
+        session.withRegistry(new DefaultVaultRegistry(new DisabledPasswordCallback(), cryptomator));
         final CryptoWriteFeature feature = new CryptoWriteFeature<>(session, new BoxWriteFeature(session, fileid), cryptomator);
         final byte[] content = RandomUtils.nextBytes(6 * 1024 * 1024);
         final TransferStatus writeStatus = new TransferStatus();
@@ -121,7 +120,7 @@ public class BoxWriteFeatureTest extends AbstractBoxTest {
         assertNotNull(out.getStatus());
         assertTrue(cryptomator.getFeature(session, Find.class, new BoxFindFeature(session, fileid)).find(test));
         final byte[] compare = new byte[content.length];
-        final InputStream stream = new CryptoReadFeature(session, new BoxReadFeature(session, fileid), cryptomator).read(test, new TransferStatus().withLength(content.length), new DisabledConnectionCallback());
+        final InputStream stream = new CryptoReadFeature(session, new BoxReadFeature(session, fileid), cryptomator).read(test, new TransferStatus().setLength(content.length), new DisabledConnectionCallback());
         IOUtils.readFully(stream, compare);
         stream.close();
         assertArrayEquals(content, compare);

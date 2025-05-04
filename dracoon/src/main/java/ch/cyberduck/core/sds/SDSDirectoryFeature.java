@@ -23,7 +23,7 @@ import ch.cyberduck.core.exception.AccessDeniedException;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.InvalidFilenameException;
 import ch.cyberduck.core.features.Directory;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.sds.io.swagger.client.ApiException;
 import ch.cyberduck.core.sds.io.swagger.client.api.NodesApi;
 import ch.cyberduck.core.sds.io.swagger.client.model.CreateFolderRequest;
@@ -57,7 +57,7 @@ public class SDSDirectoryFeature implements Directory<VersionId> {
     public Path mkdir(final Path folder, final TransferStatus status) throws BackgroundException {
         try {
             if(containerService.isContainer(folder)) {
-                return this.createRoom(folder, new HostPreferences(session.getHost()).getBoolean("sds.create.dataroom.encrypt"));
+                return this.createRoom(folder, HostPreferencesFactory.get(session.getHost()).getBoolean("sds.create.dataroom.encrypt"));
             }
             else {
                 return this.createFolder(folder);
@@ -69,12 +69,11 @@ public class SDSDirectoryFeature implements Directory<VersionId> {
     }
 
     private Path createFolder(final Path folder) throws BackgroundException, ApiException {
-        final CreateFolderRequest folderRequest = new CreateFolderRequest();
-        folderRequest.setParentId(Long.parseLong(nodeid.getVersionId(folder.getParent())));
-        folderRequest.setName(folder.getName());
-        final Node node = new NodesApi(session.getClient()).createFolder(folderRequest, StringUtils.EMPTY, null);
+        final Node node = nodeid.retry(folder.getParent(), () -> new NodesApi(session.getClient()).createFolder(new CreateFolderRequest()
+                .parentId(Long.parseLong(nodeid.getVersionId(folder.getParent())))
+                .name(folder.getName()), StringUtils.EMPTY, null));
         nodeid.cache(folder, String.valueOf(node.getId()));
-        return folder.withAttributes(new SDSAttributesAdapter(session).toAttributes(node));
+        return new Path(folder).withAttributes(new SDSAttributesAdapter(session).toAttributes(node));
     }
 
     protected Path createRoom(final Path room, final boolean encrypt) throws BackgroundException, ApiException {
@@ -92,13 +91,13 @@ public class SDSDirectoryFeature implements Directory<VersionId> {
         if(encrypt) {
             final EncryptRoomRequest options = new EncryptRoomRequest();
             options.setIsEncrypted(true);
-            return room.withType(EnumSet.of(Path.Type.directory, Path.Type.volume)).withAttributes(
+            return new Path(room).withType(EnumSet.of(Path.Type.directory, Path.Type.volume)).withAttributes(
                     new SDSAttributesAdapter(session).toAttributes(
                             new NodesApi(session.getClient()).encryptRoom(options, Long.valueOf(nodeid.getVersionId(room
                             )), StringUtils.EMPTY, null)));
         }
         else {
-            return room.withType(EnumSet.of(Path.Type.directory, Path.Type.volume)).withAttributes(
+            return new Path(room).withType(EnumSet.of(Path.Type.directory, Path.Type.volume)).withAttributes(
                     new SDSAttributesAdapter(session).toAttributes(node));
         }
     }
@@ -106,7 +105,7 @@ public class SDSDirectoryFeature implements Directory<VersionId> {
     @Override
     public void preflight(final Path workdir, final String filename) throws BackgroundException {
         if(workdir.isRoot()) {
-            if(!new HostPreferences(session.getHost()).getBoolean("sds.create.dataroom.enable")) {
+            if(!HostPreferencesFactory.get(session.getHost()).getBoolean("sds.create.dataroom.enable")) {
                 log.warn("Disallow creating new top level data room {}", filename);
                 throw new AccessDeniedException(MessageFormat.format(LocaleFactory.localizedString("Cannot create folder {0}", "Error"), filename)).withFile(workdir);
             }

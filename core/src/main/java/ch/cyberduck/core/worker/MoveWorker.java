@@ -35,13 +35,12 @@ import ch.cyberduck.core.exception.ConnectionCanceledException;
 import ch.cyberduck.core.features.AttributesFinder;
 import ch.cyberduck.core.features.Delete;
 import ch.cyberduck.core.features.Directory;
-import ch.cyberduck.core.features.Find;
 import ch.cyberduck.core.features.Move;
 import ch.cyberduck.core.features.Versioning;
 import ch.cyberduck.core.pool.SessionPool;
 import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.shared.DefaultAttributesFinderFeature;
-import ch.cyberduck.core.shared.DefaultFindFeature;
 import ch.cyberduck.core.shared.DefaultVersioningFeature;
 import ch.cyberduck.core.threading.BackgroundActionState;
 import ch.cyberduck.core.transfer.TransferStatus;
@@ -110,20 +109,20 @@ public class MoveWorker extends Worker<Map<Path, Path>> {
                         log.warn("Move operation is not recursive. Create directory {}", r.getValue());
                         // Create directory unless copy implementation is recursive
                         result.put(r.getKey(), session.getFeature(Directory.class).mkdir(r.getValue(),
-                                new TransferStatus().withLength(0L).withRegion(r.getKey().attributes().getRegion())));
+                                new TransferStatus().setLength(0L).setRegion(r.getKey().attributes().getRegion())));
                     }
                     else {
                         final TransferStatus status = new TransferStatus()
-                                .withLockId(this.getLockId(r.getKey()))
-                                .withMime(new MappingMimeTypeService().getMime(r.getValue().getName()))
-                                .withAcl(r.getKey().attributes().getAcl())
-                                .withPermission(r.getKey().attributes().getPermission())
-                                .withEncryption(r.getKey().attributes().getEncryption())
-                                .withStorageClass(r.getKey().attributes().getStorageClass())
-                                .exists(new CachingFindFeature(session, cache, session.getFeature(Find.class, new DefaultFindFeature(session))).find(r.getValue()))
-                                .withLength(r.getKey().attributes().getSize());
+                                .setLockId(this.getLockId(r.getKey()))
+                                .setMime(new MappingMimeTypeService().getMime(r.getValue().getName()))
+                                .setAcl(r.getKey().attributes().getAcl())
+                                .setPermission(r.getKey().attributes().getPermission())
+                                .setEncryption(r.getKey().attributes().getEncryption())
+                                .setStorageClass(r.getKey().attributes().getStorageClass())
+                                .setExists(new CachingFindFeature(session, cache).find(r.getValue()))
+                                .setLength(r.getKey().attributes().getSize());
                         if(status.isExists()) {
-                            status.withRemote(new CachingAttributesFinderFeature(session, cache, session.getFeature(AttributesFinder.class, new DefaultAttributesFinderFeature(session))).find(r.getValue()));
+                            status.setRemote(new CachingAttributesFinderFeature(session, cache, session.getFeature(AttributesFinder.class, new DefaultAttributesFinderFeature(session))).find(r.getValue()));
                         }
                         final Delete.Callback delete = new Delete.Callback() {
                             @Override
@@ -134,10 +133,12 @@ public class MoveWorker extends Worker<Map<Path, Path>> {
                         };
                         final Path moved = feature.move(r.getKey(), r.getValue(), status, delete, callback);
                         if(PathAttributes.EMPTY.equals(moved.attributes())) {
-                            moved.withAttributes(session.getFeature(AttributesFinder.class).find(moved));
+                            result.put(r.getKey(), new Path(moved).withAttributes(session.getFeature(AttributesFinder.class).find(moved)));
                         }
-                        result.put(r.getKey(), moved);
-                        final HostPreferences preferences = new HostPreferences(session.getHost());
+                        else {
+                            result.put(r.getKey(), moved);
+                        }
+                        final HostPreferences preferences = HostPreferencesFactory.get(session.getHost());
                         if(preferences.getBoolean("versioning.enable") && preferences.getBoolean("versioning.move.enable")) {
                             switch(session.getHost().getProtocol().getVersioningMode()) {
                                 case custom:
@@ -150,7 +151,7 @@ public class MoveWorker extends Worker<Map<Path, Path>> {
                                                 final Path target = new Path(new DefaultVersioningFeature.DefaultVersioningDirectoryProvider().provide(r.getValue()),
                                                         version.getName(), version.getType());
                                                 final Path directory = target.getParent();
-                                                if(!new CachingFindFeature(session, cache, new DefaultFindFeature(session)).find(directory)) {
+                                                if(!new CachingFindFeature(session, cache).find(directory)) {
                                                     log.debug("Create directory {} for versions", directory);
                                                     session.getFeature(Directory.class).mkdir(directory, new TransferStatus());
                                                 }
@@ -162,10 +163,10 @@ public class MoveWorker extends Worker<Map<Path, Path>> {
                                                 }
                                                 log.debug("Move previous version {} to {}", version, target);
                                                 feature.move(version, target, new TransferStatus()
-                                                        .withLockId(this.getLockId(version))
-                                                        .withMime(new MappingMimeTypeService().getMime(version.getName()))
-                                                        .exists(new CachingFindFeature(session, cache, session.getFeature(Find.class, new DefaultFindFeature(session))).find(target))
-                                                        .withLength(version.attributes().getSize()), delete, callback);
+                                                        .setLockId(this.getLockId(version))
+                                                        .setMime(new MappingMimeTypeService().getMime(version.getName()))
+                                                        .setExists(new CachingFindFeature(session, cache).find(target))
+                                                        .setLength(version.attributes().getSize()), delete, callback);
                                             }
                                         }
                                     }
@@ -185,7 +186,7 @@ public class MoveWorker extends Worker<Map<Path, Path>> {
                     final Delete delete = session.getFeature(Delete.class);
                     for(Path folder : folders) {
                         log.warn("Delete source directory {}", folder);
-                        final TransferStatus status = new TransferStatus().withLockId(this.getLockId(folder));
+                        final TransferStatus status = new TransferStatus().setLockId(this.getLockId(folder));
                         delete.delete(Collections.singletonMap(folder, status), callback, new Delete.DisabledCallback());
                     }
                 }

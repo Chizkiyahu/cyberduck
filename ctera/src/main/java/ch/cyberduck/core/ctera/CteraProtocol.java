@@ -26,6 +26,9 @@ import ch.cyberduck.core.synchronization.ComparisonService;
 import ch.cyberduck.core.synchronization.DefaultComparisonService;
 import ch.cyberduck.core.synchronization.ETagComparisonService;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import com.google.auto.service.AutoService;
 
 @AutoService(Protocol.class)
@@ -33,6 +36,7 @@ public class CteraProtocol extends AbstractProtocol {
 
     public static final String CTERA_REDIRECT_URI = String.format("%s:websso",
             PreferencesFactory.get().getProperty("oauth.handler.scheme"));
+    private static final int DIRECTIO_CHUNKSIZE = 4194304;
 
     @Override
     public Type getType() {
@@ -99,6 +103,16 @@ public class CteraProtocol extends AbstractProtocol {
     }
 
     @Override
+    public Map<String, String> getProperties() {
+        final Map<String, String> properties = new HashMap<>();
+        properties.put("queue.download.segments.size.dynamic", String.valueOf(false));
+        properties.put("queue.download.segments.size", String.valueOf(DIRECTIO_CHUNKSIZE));
+        properties.put("queue.download.segments.threshold", String.valueOf(DIRECTIO_CHUNKSIZE));
+        return properties;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
     public <T> T getFeature(final Class<T> type) {
         if(type == ComparisonService.class) {
             return (T) new DefaultComparisonService(new ETagComparisonService(), ComparisonService.disabled);

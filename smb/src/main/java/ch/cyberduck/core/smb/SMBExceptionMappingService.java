@@ -29,6 +29,8 @@ import ch.cyberduck.core.exception.QuotaException;
 import ch.cyberduck.core.exception.UnsupportedException;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.concurrent.TimeoutException;
 
@@ -38,9 +40,11 @@ import com.hierynomus.protocol.transport.TransportException;
 import com.hierynomus.smbj.common.SMBRuntimeException;
 
 public class SMBExceptionMappingService extends AbstractExceptionMappingService<SMBRuntimeException> {
+    private static final Logger log = LogManager.getLogger(SMBExceptionMappingService.class);
 
     @Override
     public BackgroundException map(final SMBRuntimeException failure) {
+        log.warn("Map failure {}", failure.toString());
         if(failure instanceof SMBApiException) {
             final StringBuilder buffer = new StringBuilder();
             final SMBApiException e = (SMBApiException) failure;
@@ -74,12 +78,12 @@ public class SMBExceptionMappingService extends AbstractExceptionMappingService<
                 case STATUS_DISK_FULL:
                     return new QuotaException(buffer.toString(), failure.getCause());
                 case STATUS_IO_TIMEOUT:
+                case STATUS_NETWORK_SESSION_EXPIRED:
                     return new ConnectionTimeoutException(buffer.toString(), failure.getCause());
                 case STATUS_CONNECTION_DISCONNECTED:
                 case STATUS_CONNECTION_RESET:
+                case STATUS_DFS_UNAVAILABLE:
                     return new ConnectionRefusedException(buffer.toString(), failure.getCause());
-                default:
-                    return new InteroperabilityException(buffer.toString(), failure.getCause());
             }
         }
         for(Throwable cause : ExceptionUtils.getThrowableList(failure)) {

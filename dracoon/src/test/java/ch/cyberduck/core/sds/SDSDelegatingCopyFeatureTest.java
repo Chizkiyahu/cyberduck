@@ -123,7 +123,7 @@ public class SDSDelegatingCopyFeatureTest extends AbstractSDSTest {
         new SDSTouchFeature(session, nodeid).touch(copy, new TransferStatus());
         final SDSDelegatingCopyFeature feature = new SDSDelegatingCopyFeature(session, nodeid, new SDSCopyFeature(session, nodeid));
         assertTrue(feature.isSupported(test, Optional.of(copy)));
-        final Path target = feature.copy(test, copy, new TransferStatus().exists(true), new DisabledConnectionCallback(), new DisabledStreamListener());
+        final Path target = feature.copy(test, copy, new TransferStatus().setExists(true), new DisabledConnectionCallback(), new DisabledStreamListener());
         assertNotEquals(test.attributes().getVersionId(), target.attributes().getVersionId());
         assertEquals(target.attributes().getVersionId(), new SDSAttributesFinderFeature(session, nodeid).find(target).getVersionId());
         final Find find = new DefaultFindFeature(session);
@@ -139,16 +139,14 @@ public class SDSDelegatingCopyFeatureTest extends AbstractSDSTest {
             new Path(new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory, Path.Type.volume)), new TransferStatus());
         final Path folder = new Path(room, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory));
         new SDSDirectoryFeature(session, nodeid).mkdir(folder, new TransferStatus());
-        final Path test = new Path(folder, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
-        new SDSTouchFeature(session, nodeid).touch(test, new TransferStatus());
-        final Path copy = new Path(folder, test.getName(), EnumSet.of(Path.Type.file));
+        final Path test = new SDSTouchFeature(session, nodeid).touch(new Path(folder, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file)), new TransferStatus());
+        final Path copy = new SDSTouchFeature(session, nodeid).touch(new Path(folder, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file)), new TransferStatus());
         final SDSCopyFeature proxy = new SDSCopyFeature(session, nodeid);
         final SDSDelegatingCopyFeature feature = new SDSDelegatingCopyFeature(session, nodeid, proxy);
         assertFalse(proxy.isSupported(test, Optional.of(copy)));
         assertTrue(feature.isSupported(test, Optional.of(copy)));
-        assertNotNull(feature.copy(test, copy, new TransferStatus().exists(true), new DisabledConnectionCallback(), new DisabledStreamListener()).attributes().getVersionId());
+        assertNotNull(feature.copy(test, copy, new TransferStatus().setExists(true), new DisabledConnectionCallback(), new DisabledStreamListener()).attributes().getVersionId());
         final Find find = new DefaultFindFeature(session);
-        final AttributedList<Path> files = new SDSListService(session, nodeid).list(folder, new DisabledListProgressListener());
         assertTrue(find.find(copy));
         new SDSDeleteFeature(session, nodeid).delete(Collections.singletonList(room), new DisabledLoginCallback(), new Delete.DisabledCallback());
     }
@@ -210,7 +208,7 @@ public class SDSDelegatingCopyFeatureTest extends AbstractSDSTest {
         final Path target = new Path(room2, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
         final SDSCopyFeature proxy = new SDSCopyFeature(session, nodeid);
         final SDSDelegatingCopyFeature feature = new SDSDelegatingCopyFeature(session, nodeid, proxy);
-        final Path copy = feature.copy(test, target, new TransferStatus().withLength(content.length), new DisabledConnectionCallback() {
+        final Path copy = feature.copy(test, target, new TransferStatus().setLength(content.length), new DisabledConnectionCallback() {
             @Override
             public void warn(final Host bookmark, final String title, final String message, final String defaultButton, final String cancelButton, final String preference) {
                 //
@@ -228,7 +226,7 @@ public class SDSDelegatingCopyFeatureTest extends AbstractSDSTest {
         assertTrue(new SDSFindFeature(session, nodeid).find(test));
         assertTrue(new SDSFindFeature(session, nodeid).find(copy));
         final byte[] compare = new byte[content.length];
-        final InputStream stream = new SDSReadFeature(session, nodeid).read(target, new TransferStatus().withLength(content.length), new DisabledConnectionCallback() {
+        final InputStream stream = new SDSReadFeature(session, nodeid).read(target, new TransferStatus().setLength(content.length), new DisabledConnectionCallback() {
             @Override
             public void warn(final Host bookmark, final String title, final String message, final String defaultButton, final String cancelButton, final String preference) {
                 //
@@ -263,13 +261,13 @@ public class SDSDelegatingCopyFeatureTest extends AbstractSDSTest {
         final Path target = new Path(room1, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
         final SDSCopyFeature proxy = new SDSCopyFeature(session, nodeid);
         final SDSDelegatingCopyFeature feature = new SDSDelegatingCopyFeature(session, nodeid, proxy);
-        assertNotNull(feature.copy(test, target, new TransferStatus().withLength(content.length), new DisabledConnectionCallback(), new DisabledStreamListener()).attributes().getVersionId());
+        assertNotNull(feature.copy(test, target, new TransferStatus().setLength(content.length), new DisabledConnectionCallback(), new DisabledStreamListener()).attributes().getVersionId());
         assertFalse(proxy.isSupported(test, Optional.of(target)));
         assertTrue(feature.isSupported(test, Optional.of(target)));
         assertTrue(new SDSFindFeature(session, nodeid).find(test));
         assertTrue(new SDSFindFeature(session, nodeid).find(target));
         final byte[] compare = new byte[content.length];
-        final InputStream stream = new TripleCryptReadFeature(session, nodeid, new SDSReadFeature(session, nodeid)).read(target, new TransferStatus().withLength(content.length), new DisabledConnectionCallback() {
+        final InputStream stream = new TripleCryptReadFeature(session, nodeid, new SDSReadFeature(session, nodeid)).read(target, new TransferStatus().setLength(content.length), new DisabledConnectionCallback() {
             @Override
             public void warn(final Host bookmark, final String title, final String message, final String defaultButton, final String cancelButton, final String preference) {
                 //
@@ -296,7 +294,7 @@ public class SDSDelegatingCopyFeatureTest extends AbstractSDSTest {
                 new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory, Path.Type.volume)), new TransferStatus());
         final EncryptRoomRequest encrypt = new EncryptRoomRequest().isEncrypted(true);
         new NodesApi(session.getClient()).encryptRoom(encrypt, Long.parseLong(new SDSNodeIdProvider(session).getVersionId(room2)), StringUtils.EMPTY, null);
-        room2.attributes().withCustom(KEY_ENCRYPTED, String.valueOf(true));
+        room2.attributes().setCustom(KEY_ENCRYPTED, String.valueOf(true));
         final byte[] content = RandomUtils.nextBytes(32769);
         final TransferStatus status = new TransferStatus();
         status.setLength(content.length);
@@ -310,7 +308,7 @@ public class SDSDelegatingCopyFeatureTest extends AbstractSDSTest {
         final Path target = new Path(room2, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
         final SDSCopyFeature proxy = new SDSCopyFeature(session, nodeid);
         final SDSDelegatingCopyFeature feature = new SDSDelegatingCopyFeature(session, nodeid, proxy);
-        assertNotNull(feature.copy(test, target, new TransferStatus().withLength(content.length), new DisabledConnectionCallback() {
+        assertNotNull(feature.copy(test, target, new TransferStatus().setLength(content.length), new DisabledConnectionCallback() {
             @Override
             public void warn(final Host bookmark, final String title, final String message, final String defaultButton, final String cancelButton, final String preference) {
                 //
@@ -326,7 +324,7 @@ public class SDSDelegatingCopyFeatureTest extends AbstractSDSTest {
         assertTrue(new SDSFindFeature(session, nodeid).find(test));
         assertTrue(new SDSFindFeature(session, nodeid).find(target));
         final byte[] compare = new byte[content.length];
-        final InputStream stream = new TripleCryptReadFeature(session, nodeid, new SDSReadFeature(session, nodeid)).read(target, new TransferStatus().withLength(content.length), new DisabledConnectionCallback() {
+        final InputStream stream = new TripleCryptReadFeature(session, nodeid, new SDSReadFeature(session, nodeid)).read(target, new TransferStatus().setLength(content.length), new DisabledConnectionCallback() {
             @Override
             public void warn(final Host bookmark, final String title, final String message, final String defaultButton, final String cancelButton, final String preference) {
                 //
@@ -353,7 +351,7 @@ public class SDSDelegatingCopyFeatureTest extends AbstractSDSTest {
                 new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory, Path.Type.volume)), new TransferStatus());
         final EncryptRoomRequest encrypt = new EncryptRoomRequest().isEncrypted(true);
         new NodesApi(session.getClient()).encryptRoom(encrypt, Long.parseLong(new SDSNodeIdProvider(session).getVersionId(room2)), StringUtils.EMPTY, null);
-        room2.attributes().withCustom(KEY_ENCRYPTED, String.valueOf(true));
+        room2.attributes().setCustom(KEY_ENCRYPTED, String.valueOf(true));
         final byte[] content = RandomUtils.nextBytes(32769);
         final TransferStatus status = new TransferStatus();
         status.setLength(content.length);
@@ -368,7 +366,7 @@ public class SDSDelegatingCopyFeatureTest extends AbstractSDSTest {
         final Path target = new Path(room2, test.getName(), EnumSet.of(Path.Type.file));
         final SDSDelegatingCopyFeature feature = new SDSDelegatingCopyFeature(session, nodeid, new SDSCopyFeature(session, nodeid));
         assertTrue(feature.isSupported(test, Optional.of(target)));
-        final Path copy = feature.copy(test, target, new TransferStatus().withLength(content.length), new DisabledConnectionCallback() {
+        final Path copy = feature.copy(test, target, new TransferStatus().setLength(content.length), new DisabledConnectionCallback() {
             @Override
             public void warn(final Host bookmark, final String title, final String message, final String defaultButton, final String cancelButton, final String preference) {
                 //
@@ -383,7 +381,7 @@ public class SDSDelegatingCopyFeatureTest extends AbstractSDSTest {
         assertTrue(new SDSFindFeature(session, nodeid).find(test));
         assertTrue(new SDSFindFeature(session, nodeid).find(target));
         final byte[] compare = new byte[content.length];
-        final InputStream stream = new TripleCryptReadFeature(session, nodeid, new SDSReadFeature(session, nodeid)).read(copy, new TransferStatus().withLength(content.length), new DisabledConnectionCallback() {
+        final InputStream stream = new TripleCryptReadFeature(session, nodeid, new SDSReadFeature(session, nodeid)).read(copy, new TransferStatus().setLength(content.length), new DisabledConnectionCallback() {
             @Override
             public void warn(final Host bookmark, final String title, final String message, final String defaultButton, final String cancelButton, final String preference) {
                 //

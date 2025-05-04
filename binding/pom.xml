@@ -19,10 +19,43 @@
     <parent>
         <groupId>ch.cyberduck</groupId>
         <artifactId>parent</artifactId>
-        <version>9.1.2-SNAPSHOT</version>
+        <version>9.2.0-SNAPSHOT</version>
     </parent>
     <artifactId>binding</artifactId>
     <packaging>jar</packaging>
+
+    <profiles>
+        <profile>
+            <id>windows</id>
+            <activation>
+                <os>
+                    <family>Windows</family>
+                </os>
+            </activation>
+            <properties>
+                <maven.test.skip>true</maven.test.skip>
+            </properties>
+        </profile>
+        <profile>
+            <id>linux</id>
+            <activation>
+                <os>
+                    <family>Linux</family>
+                </os>
+            </activation>
+            <properties>
+                <maven.test.skip>true</maven.test.skip>
+            </properties>
+        </profile>
+    </profiles>
+
+    <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-dependency-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 
     <dependencies>
         <dependency>
@@ -33,7 +66,21 @@
         <dependency>
             <groupId>org.rococoa</groupId>
             <artifactId>rococoa-core</artifactId>
-            <version>0.9.1</version>
+            <version>${rococoa-version}</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.cyberduck</groupId>
+            <artifactId>test</artifactId>
+            <type>pom</type>
+            <scope>test</scope>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.rococoa</groupId>
+            <artifactId>librococoa</artifactId>
+            <version>${rococoa-version}</version>
+            <type>dylib</type>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

@@ -33,7 +33,7 @@ import ch.cyberduck.core.features.Share;
 import ch.cyberduck.core.features.Upload;
 import ch.cyberduck.core.features.Versioning;
 import ch.cyberduck.core.features.Write;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.preferences.PreferencesReader;
 import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.shared.*;
@@ -47,7 +47,7 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-public abstract class Session<C> implements TranscriptListener {
+public abstract class Session<C> implements FeatureFactory, TranscriptListener {
     private static final Logger log = LogManager.getLogger(Session.class);
 
     /**
@@ -82,7 +82,7 @@ public abstract class Session<C> implements TranscriptListener {
         if(host.getCredentials().isAnonymousLogin()) {
             return false;
         }
-        final PreferencesReader preferences = new HostPreferences(host);
+        final PreferencesReader preferences = HostPreferencesFactory.get(host);
         if(preferences.getBoolean(String.format("connection.unsecure.%s", host.getHostname()))) {
             return false;
         }
@@ -255,8 +255,8 @@ public abstract class Session<C> implements TranscriptListener {
      * @return Feature implementation or null when not supported
      */
     @SuppressWarnings("unchecked")
+    @Override
     public <T> T getFeature(final Class<T> type) {
-        metrics.increment(type);
         return this.getFeature(type, this._getFeature(type));
     }
 
@@ -269,6 +269,7 @@ public abstract class Session<C> implements TranscriptListener {
      */
     @SuppressWarnings("unchecked")
     public <T> T getFeature(final Class<T> type, final T feature) {
+        metrics.increment(type);
         return registry.getFeature(this, type, feature);
     }
 

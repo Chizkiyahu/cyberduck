@@ -27,7 +27,7 @@ import ch.cyberduck.core.SimplePathPredicate;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.NotfoundException;
 import ch.cyberduck.core.http.HttpExceptionMappingService;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 
 import org.apache.commons.collections4.ListUtils;
 import org.apache.logging.log4j.LogManager;
@@ -61,8 +61,12 @@ public class DAVListService implements ListService {
     public AttributedList<Path> list(final Path directory, final ListProgressListener listener) throws BackgroundException {
         try {
             final AttributedList<Path> children = new AttributedList<>();
-            for(List<DavResource> list : ListUtils.partition(this.list(directory),
-                    new HostPreferences(session.getHost()).getInteger("webdav.listing.chunksize"))) {
+            final List<DavResource> resources = this.propfind(directory);
+            if(resources.isEmpty()) {
+                listener.chunk(directory, children);
+            }
+            for(List<DavResource> list : ListUtils.partition(resources,
+                    HostPreferencesFactory.get(session.getHost()).getInteger("webdav.listing.chunksize"))) {
                 for(final DavResource resource : list) {
                     if(new SimplePathPredicate(new Path(resource.getHref().getPath(), EnumSet.of(Path.Type.directory))).test(directory)) {
                         log.warn("Ignore resource {}", resource);
@@ -76,8 +80,8 @@ public class DAVListService implements ListService {
                     final Path file = new Path(directory, PathNormalizer.name(resource.getHref().getPath()),
                             resource.isDirectory() ? EnumSet.of(Path.Type.directory) : EnumSet.of(Path.Type.file), attr);
                     children.add(file);
-                    listener.chunk(directory, children);
                 }
+                listener.chunk(directory, children);
             }
             return children;
         }
@@ -89,7 +93,7 @@ public class DAVListService implements ListService {
         }
     }
 
-    protected List<DavResource> list(final Path directory) throws IOException {
+    protected List<DavResource> propfind(final Path directory) throws IOException {
         return session.getClient().list(new DAVPathEncoder().encode(directory), 1,
                 Stream.of(
                                 DAVTimestampFeature.LAST_MODIFIED_CUSTOM_NAMESPACE,

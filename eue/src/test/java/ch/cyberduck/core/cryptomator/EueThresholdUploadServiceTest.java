@@ -20,7 +20,6 @@ import ch.cyberduck.core.BytecountStreamListener;
 import ch.cyberduck.core.DisabledConnectionCallback;
 import ch.cyberduck.core.DisabledLoginCallback;
 import ch.cyberduck.core.DisabledPasswordCallback;
-import ch.cyberduck.core.DisabledPasswordStore;
 import ch.cyberduck.core.DisabledProgressListener;
 import ch.cyberduck.core.Local;
 import ch.cyberduck.core.Path;
@@ -74,12 +73,12 @@ public class EueThresholdUploadServiceTest extends AbstractEueSessionTest {
     @Test
     public void testUploadVault() throws Exception {
         final EueResourceIdProvider fileid = new EueResourceIdProvider(session);
-        final Path container = new EueDirectoryFeature(session, fileid).mkdir(new Path(new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory)), new TransferStatus().withLength(0L));
+        final Path container = new EueDirectoryFeature(session, fileid).mkdir(new Path(new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory)), new TransferStatus().setLength(0L));
         final Path vault = new Path(container, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory));
         final Path test = new Path(vault, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
         final CryptoVault cryptomator = new CryptoVault(vault);
         cryptomator.create(session, new VaultCredentials("test"), vaultVersion);
-        final DefaultVaultRegistry registry = new DefaultVaultRegistry(new DisabledPasswordStore(), new DisabledPasswordCallback(), cryptomator);
+        final DefaultVaultRegistry registry = new DefaultVaultRegistry(new DisabledPasswordCallback(), cryptomator);
         session.withRegistry(registry);
         final Local local = new Local(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
         final byte[] content = RandomUtils.nextBytes(8840780);
@@ -98,7 +97,7 @@ public class EueThresholdUploadServiceTest extends AbstractEueSessionTest {
         assertTrue(cryptomator.getFeature(session, Find.class, new EueFindFeature(session, fileid)).find(test));
         assertEquals(content.length, cryptomator.getFeature(session, AttributesFinder.class, new EueAttributesFinderFeature(session, fileid)).find(test).getSize());
         final ByteArrayOutputStream buffer = new ByteArrayOutputStream(content.length);
-        final TransferStatus readStatus = new TransferStatus().withLength(content.length);
+        final TransferStatus readStatus = new TransferStatus().setLength(content.length);
         final InputStream in = new CryptoReadFeature(session, new EueReadFeature(session, fileid), cryptomator).read(test, readStatus, new DisabledConnectionCallback());
         new StreamCopier(readStatus, readStatus).transfer(in, buffer);
         assertArrayEquals(content, buffer.toByteArray());
@@ -109,12 +108,12 @@ public class EueThresholdUploadServiceTest extends AbstractEueSessionTest {
     @Test
     public void testUploadVaultWithBulkFeature() throws Exception {
         final EueResourceIdProvider fileid = new EueResourceIdProvider(session);
-        final Path container = new EueDirectoryFeature(session, fileid).mkdir(new Path(new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory)), new TransferStatus().withLength(0L));
+        final Path container = new EueDirectoryFeature(session, fileid).mkdir(new Path(new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory)), new TransferStatus().setLength(0L));
         final Path vault = new Path(container, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory));
         final Path test = new Path(vault, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
         final CryptoVault cryptomator = new CryptoVault(vault);
         cryptomator.create(session, new VaultCredentials("test"), vaultVersion);
-        final DefaultVaultRegistry registry = new DefaultVaultRegistry(new DisabledPasswordStore(), new DisabledPasswordCallback(), cryptomator);
+        final DefaultVaultRegistry registry = new DefaultVaultRegistry(new DisabledPasswordCallback(), cryptomator);
         session.withRegistry(registry);
         final Local local = new Local(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
         final byte[] content = RandomUtils.nextBytes(50240000);
@@ -135,7 +134,7 @@ public class EueThresholdUploadServiceTest extends AbstractEueSessionTest {
         assertTrue(cryptomator.getFeature(session, Find.class, new EueFindFeature(session, fileid)).find(test));
         assertEquals(content.length, cryptomator.getFeature(session, AttributesFinder.class, new EueAttributesFinderFeature(session, fileid)).find(test).getSize());
         final ByteArrayOutputStream buffer = new ByteArrayOutputStream(content.length);
-        final TransferStatus readStatus = new TransferStatus().withLength(content.length);
+        final TransferStatus readStatus = new TransferStatus().setLength(content.length);
         final InputStream in = new CryptoReadFeature(session, new EueReadFeature(session, fileid), cryptomator).read(test, readStatus, new DisabledConnectionCallback());
         new StreamCopier(readStatus, readStatus).transfer(in, buffer);
         assertArrayEquals(content, buffer.toByteArray());

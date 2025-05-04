@@ -18,7 +18,6 @@ package ch.cyberduck.core.local;
  * dkocher@cyberduck.ch
  */
 
-import ch.cyberduck.binding.foundation.NSData;
 import ch.cyberduck.binding.foundation.NSFileManager;
 import ch.cyberduck.binding.foundation.NSURL;
 import ch.cyberduck.core.AttributedList;
@@ -27,7 +26,10 @@ import ch.cyberduck.core.Local;
 import ch.cyberduck.core.exception.AccessDeniedException;
 import ch.cyberduck.core.exception.LocalAccessDeniedException;
 import ch.cyberduck.core.library.Native;
+import ch.cyberduck.core.preferences.BundleApplicationResourcesFinder;
 import ch.cyberduck.core.preferences.PreferencesFactory;
+import ch.cyberduck.core.preferences.SecurityApplicationGroupSupportDirectoryFinder;
+import ch.cyberduck.core.preferences.TemporarySupportDirectoryFinder;
 
 import org.apache.commons.io.input.ProxyInputStream;
 import org.apache.commons.io.output.ProxyOutputStream;
@@ -44,11 +46,15 @@ import java.nio.file.Paths;
 public class FinderLocal extends Local {
     private static final Logger log = LogManager.getLogger(FinderLocal.class);
 
+    private static final Local APP_PACKAGE = new BundleApplicationResourcesFinder().find();
+    private static final Local TEMPORARY = new TemporarySupportDirectoryFinder().find();
+    private static final Local GROUP_CONTAINER = new SecurityApplicationGroupSupportDirectoryFinder().find();
+
     static {
         Native.load("core");
     }
 
-    private static final FilesystemBookmarkResolver<NSData, NSURL> resolver
+    private static final FilesystemBookmarkResolver<NSURL> resolver
             = FilesystemBookmarkResolverFactory.get();
 
     public FinderLocal(final Local parent, final String name) {
@@ -153,42 +159,58 @@ public class FinderLocal extends Local {
         return this.lock(interactive, resolver);
     }
 
-    protected NSURL lock(final boolean interactive, final FilesystemBookmarkResolver<NSData, NSURL> resolver) throws AccessDeniedException {
+    protected NSURL lock(final boolean interactive, final FilesystemBookmarkResolver<NSURL> resolver) throws AccessDeniedException {
         final String path = this.getAbbreviatedPath();
-        NSURL resolved;
-        if(null != this.getBookmark()) {
-            resolved = resolver.resolve(NSData.dataWithBase64EncodedString(this.getBookmark()));
-        }
-        else {
-            try {
-                resolved = resolver.resolve(resolver.create(this));
-            }
-            catch(AccessDeniedException e) {
-                log.warn("Failure {} creating bookmark for {}", e, path);
-                if(interactive) {
-                    log.warn("Missing security scoped bookmark for file {}", path);
-                    // Prompt user if no bookmark reference is available
-                    final NSData bookmark = resolver.prompt(this);
-                    if(null == bookmark) {
-                        // Prompt canceled by user
-                        return null;
-                    }
-                    resolved = resolver.resolve(bookmark);
-                }
-                else {
-                    log.warn("No security scoped bookmark for {}", path);
-                    // Ignore failure resolving path
-                    return null;
-                }
+        if(null == bookmark) {
+            if(!skip(this)) {
+                bookmark = resolver.create(this, interactive);
             }
         }
-        if(null == resolved) {
+        if(null == bookmark) {
+            log.warn("No security scoped bookmark for {}", path);
             return null;
         }
-        if(!resolved.startAccessingSecurityScopedResource()) {
-            throw new LocalAccessDeniedException(String.format("Failure accessing security scoped resource for %s", path));
+        log.debug("Lock with bookmark {}", bookmark);
+        try {
+            final NSURL resolved = resolver.resolve(bookmark);
+            if(null == resolved) {
+                log.warn("Unable to resolve bookmark {}", bookmark);
+                return null;
+            }
+            if(!resolved.startAccessingSecurityScopedResource()) {
+                throw new LocalAccessDeniedException(String.format("Failure accessing security scoped resource for %s", path));
+            }
+            return resolved;
         }
-        return resolved;
+        catch(LocalAccessDeniedException e) {
+            log.warn("Ignore failure {} resolving bookmark {}", e, bookmark);
+            return null;
+        }
+    }
+
+    /**
+     * Determine if creating security scoped bookmarks for file should be skipped
+     */
+    private static boolean skip(final Local file) {
+        if(null != TEMPORARY) {
+            if(file.isChild(TEMPORARY)) {
+                // Skip prompt for file in temporary folder where access is not sandboxed
+                return true;
+            }
+        }
+        if(null != GROUP_CONTAINER) {
+            if(file.isChild(GROUP_CONTAINER)) {
+                // Skip prompt for file in application group folder where access is not sandboxed
+                return true;
+            }
+        }
+        if(null != APP_PACKAGE) {
+            if(file.isChild(APP_PACKAGE)) {
+                // Skip prompt for file in application bundle resources
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

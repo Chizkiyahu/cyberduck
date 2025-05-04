@@ -15,6 +15,7 @@ package ch.cyberduck.core;
  * GNU General Public License for more details.
  */
 
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.serializer.Deserializer;
 
 import org.apache.commons.lang3.StringUtils;
@@ -22,10 +23,12 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class ProfileTest {
 
@@ -49,22 +52,33 @@ public class ProfileTest {
 
             @Override
             public Map<String, String> mapForKey(final String key) {
-                return null;
+                if("Properties".equals(key)) {
+                    final HashMap<String, String> properties = new HashMap<>();
+                    properties.put("customprop1", "value1");
+                    properties.put("custombool1", "true");
+                    properties.put("customint1", "4");
+                    return properties;
+                }
+                return Collections.emptyMap();
             }
 
             @Override
-            public boolean booleanForKey(final String key) {
+            public Boolean booleanForKey(final String key) {
                 return false;
             }
 
             @Override
             public List<String> keys() {
-                return null;
+                return Collections.singletonList("Properties");
             }
         });
         assertTrue(profile.getProperties().containsKey("quota.notification.url"));
         assertEquals("https://www.gmx.net/produkte/cloud/speicher-erweitern/?mc=03962659",
             profile.getProperties().get("quota.notification.url"));
+        assertEquals("value1",
+                profile.getProperties().get("customprop1"));
+        assertTrue(HostPreferencesFactory.get(new Host(profile)).getBoolean("custombool1"));
+        assertEquals(4, HostPreferencesFactory.get(new Host(profile)).getInteger("customint1"));
     }
 
     @Test
@@ -91,7 +105,7 @@ public class ProfileTest {
             }
 
             @Override
-            public boolean booleanForKey(final String key) {
+            public Boolean booleanForKey(final String key) {
                 return false;
             }
 
@@ -127,11 +141,11 @@ public class ProfileTest {
 
             @Override
             public Map<String, String> mapForKey(final String key) {
-                return null;
+                return Collections.singletonMap("propFromMap", "${application.identifier}");
             }
 
             @Override
-            public boolean booleanForKey(final String key) {
+            public Boolean booleanForKey(final String key) {
                 return false;
             }
 
@@ -149,5 +163,6 @@ public class ProfileTest {
         assertEquals("${notfound}", profile.getOAuthClientSecret());
         assertEquals("io.cyberduck", profile.getProperties().get("prop"));
         assertEquals("${unknown}", profile.getProperties().get("unknown"));
+        assertEquals("io.cyberduck", profile.getProperties().get("propFromMap"));
     }
 }

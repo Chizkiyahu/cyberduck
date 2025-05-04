@@ -67,8 +67,8 @@ public class Local extends AbstractPath implements Referenceable, Serializable {
     /**
      * Absolute path in local file system
      */
-    private String path;
-    private String bookmark;
+    protected String path;
+    protected String bookmark;
 
     public Local(final String parent, final String name) {
         this(parent, name, PreferencesFactory.get().getProperty("local.delimiter"));
@@ -280,12 +280,8 @@ public class Local extends AbstractPath implements Referenceable, Serializable {
     /**
      * @param data Security scoped bookmark to save for later retrieval of file reference or null to remove
      */
-    public void setBookmark(final String data) {
+    public Local setBookmark(final String data) {
         this.bookmark = data;
-    }
-
-    public Local withBookmark(final String data) {
-        this.setBookmark(data);
         return this;
     }
 
@@ -440,7 +436,7 @@ public class Local extends AbstractPath implements Referenceable, Serializable {
 
 
     public InputStream getInputStream() throws AccessDeniedException {
-        return getInputStream(path);
+        return this.getInputStream(path);
     }
 
     protected InputStream getInputStream(final String path) throws AccessDeniedException {

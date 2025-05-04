@@ -30,7 +30,7 @@ import ch.cyberduck.core.io.ChecksumCompute;
 import ch.cyberduck.core.io.HashAlgorithm;
 import ch.cyberduck.core.io.MemorySegementingOutputStream;
 import ch.cyberduck.core.io.SHA256ChecksumCompute;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.threading.BackgroundActionState;
 import ch.cyberduck.core.threading.BackgroundExceptionCallable;
 import ch.cyberduck.core.threading.DefaultRetryCallable;
@@ -96,7 +96,7 @@ public class EueMultipartWriteFeature implements MultipartWrite<EueWriteFeature.
             throw new ChecksumException(LocaleFactory.localizedString("Checksum failure", "Error"), e);
         }
         return new HttpResponseOutputStream<EueWriteFeature.Chunk>(new MemorySegementingOutputStream(proxy,
-                new HostPreferences(session.getHost()).getInteger("eue.upload.multipart.size")),
+                HostPreferencesFactory.get(session.getHost()).getInteger("eue.upload.multipart.size")),
                 new EueAttributesAdapter(), status) {
             @Override
             public EueWriteFeature.Chunk getStatus() {
@@ -150,13 +150,13 @@ public class EueMultipartWriteFeature implements MultipartWrite<EueWriteFeature.
                     throw canceled.get();
                 }
                 final byte[] content = Arrays.copyOfRange(b, off, len);
-                if(0L == offset && content.length < new HostPreferences(session.getHost()).getLong("eue.upload.multipart.threshold")) {
+                if(0L == offset && content.length < HostPreferencesFactory.get(session.getHost()).getLong("eue.upload.multipart.threshold")) {
                     final EueWriteFeature writer = new EueWriteFeature(session, fileid);
                     log.warn("Cancel chunked upload for {}", file);
                     writer.cancel(uploadUri);
-                    final TransferStatus status = new TransferStatus(overall).withLength(content.length);
+                    final TransferStatus status = new TransferStatus(overall).setLength(content.length);
                     final HttpResponseOutputStream<EueWriteFeature.Chunk> stream = writer.write(file,
-                            status.withChecksum(writer.checksum(file, overall).compute(new ByteArrayInputStream(content), status)), callback);
+                            status.setChecksum(writer.checksum(file, overall).compute(new ByteArrayInputStream(content), status)), callback);
                     stream.write(content);
                     stream.close();
                     result.set(stream.getStatus());

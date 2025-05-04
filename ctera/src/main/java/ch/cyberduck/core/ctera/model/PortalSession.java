@@ -15,10 +15,23 @@ package ch.cyberduck.core.ctera.model;
  * GNU General Public License for more details.
  */
 
+import org.apache.commons.lang3.StringUtils;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public final class PortalSession {
 
     public String username;
+    public String userRef;
+
+    public String getUserIdFromUserRef() {
+        if(StringUtils.isNotBlank(userRef)) {
+            final String[] segments = userRef.split("/");
+            if(segments.length > 1) {
+                return segments[1];
+            }
+        }
+        return null;
+    }
 }

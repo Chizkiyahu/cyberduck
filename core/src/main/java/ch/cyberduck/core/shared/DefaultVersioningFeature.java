@@ -35,7 +35,7 @@ import ch.cyberduck.core.features.Directory;
 import ch.cyberduck.core.features.Find;
 import ch.cyberduck.core.features.Move;
 import ch.cyberduck.core.features.Versioning;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.transfer.TransferStatus;
 import ch.cyberduck.ui.comparator.FilenameComparator;
 
@@ -69,7 +69,7 @@ public class DefaultVersioningFeature implements Versioning {
         this.session = session;
         this.provider = provider;
         this.formatter = formatter;
-        this.include = Pattern.compile(new HostPreferences(session.getHost()).getProperty("versioning.include.regex"));
+        this.include = Pattern.compile(HostPreferencesFactory.get(session.getHost()).getProperty("versioning.include.regex"));
     }
 
     @Override
@@ -114,14 +114,14 @@ public class DefaultVersioningFeature implements Versioning {
         }
         log.debug("Rename existing file {} to {}", file, version);
         feature.move(file, version,
-                new TransferStatus().exists(false), new Delete.DisabledCallback(), new DisabledConnectionCallback());
+                new TransferStatus().setExists(false), new Delete.DisabledCallback(), new DisabledConnectionCallback());
         return true;
     }
 
     @Override
     public void revert(final Path file) throws BackgroundException {
         final Path target = new Path(file.getParent().getParent(), formatter.fromVersion(file.getName()), file.getType());
-        final TransferStatus status = new TransferStatus().exists(session.getFeature(Find.class).find(target));
+        final TransferStatus status = new TransferStatus().setExists(session.getFeature(Find.class).find(target));
         if(status.isExists()) {
             if(this.save(target)) {
                 status.setExists(false);
@@ -159,7 +159,7 @@ public class DefaultVersioningFeature implements Versioning {
         }
         final List<Path> versions = this.list(file, new DisabledListProgressListener()).toStream()
                 .sorted(new FilenameComparator(false)).skip(
-                        new HostPreferences(session.getHost()).getInteger("versioning.limit")).collect(Collectors.toList());
+                        HostPreferencesFactory.get(session.getHost()).getInteger("versioning.limit")).collect(Collectors.toList());
         log.warn("Delete {} previous versions of {}", versions.size(), file);
         delete.delete(versions, callback, new Delete.DisabledCallback());
     }

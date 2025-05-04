@@ -37,7 +37,7 @@ import ch.cyberduck.core.io.Checksum;
 import ch.cyberduck.core.io.ChecksumComputeFactory;
 import ch.cyberduck.core.io.HashAlgorithm;
 import ch.cyberduck.core.io.StreamListener;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.threading.BackgroundExceptionCallable;
 import ch.cyberduck.core.threading.ThreadPool;
 import ch.cyberduck.core.threading.ThreadPoolFactory;
@@ -82,8 +82,8 @@ public class S3MultipartUploadService extends HttpUploadFeature<StorageObject, M
     private final Integer concurrency;
 
     public S3MultipartUploadService(final S3Session session, final Write<StorageObject> writer, final S3AccessControlListFeature acl) {
-        this(session, writer, acl, new HostPreferences(session.getHost()).getLong("s3.upload.multipart.size"),
-                new HostPreferences(session.getHost()).getInteger("s3.upload.multipart.concurrency"));
+        this(session, writer, acl, HostPreferencesFactory.get(session.getHost()).getLong("s3.upload.multipart.size"),
+                HostPreferencesFactory.get(session.getHost()).getInteger("s3.upload.multipart.concurrency"));
     }
 
     public S3MultipartUploadService(final S3Session session, final Write<StorageObject> writer, final S3AccessControlListFeature acl, final Long partsize, final Integer concurrency) {
@@ -93,7 +93,7 @@ public class S3MultipartUploadService extends HttpUploadFeature<StorageObject, M
         this.containerService = session.getFeature(PathContainerService.class);
         this.writer = writer;
         this.acl = acl;
-        this.partsize = Math.max(new HostPreferences(session.getHost()).getLong("s3.upload.multipart.partsize.minimum"), partsize);
+        this.partsize = Math.max(HostPreferencesFactory.get(session.getHost()).getLong("s3.upload.multipart.partsize.minimum"), partsize);
         this.concurrency = concurrency;
     }
 
@@ -195,7 +195,7 @@ public class S3MultipartUploadService extends HttpUploadFeature<StorageObject, M
                 object.addAllMetadata(multipart.getMetadata());
             }
             // Mark parent status as complete
-            status.withResponse(new S3AttributesAdapter(session.getHost()).toAttributes(object)).setComplete();
+            status.setResponse(new S3AttributesAdapter(session.getHost()).toAttributes(object)).setComplete();
             return object;
         }
         catch(ServiceException e) {
@@ -218,8 +218,8 @@ public class S3MultipartUploadService extends HttpUploadFeature<StorageObject, M
             public MultipartPart call() throws BackgroundException {
                 overall.validate();
                 final TransferStatus status = new TransferStatus()
-                        .withLength(length)
-                        .withOffset(offset);
+                        .setLength(length)
+                        .setOffset(offset);
                 final Map<String, String> requestParameters = new HashMap<>();
                 requestParameters.put("uploadId", multipart.getUploadId());
                 requestParameters.put("partNumber", String.valueOf(partNumber));

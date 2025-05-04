@@ -29,7 +29,7 @@ import ch.cyberduck.core.exception.InteroperabilityException;
 import ch.cyberduck.core.exception.LoginCanceledException;
 import ch.cyberduck.core.exception.LoginFailureException;
 import ch.cyberduck.core.features.*;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.preferences.PreferencesReader;
 import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.proxy.ProxySocketFactory;
@@ -71,7 +71,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import com.jcraft.jsch.agentproxy.AgentProxyException;
 import net.schmizz.concurrent.Promise;
 import net.schmizz.keepalive.KeepAlive;
 import net.schmizz.keepalive.KeepAliveProvider;
@@ -97,7 +96,7 @@ import net.schmizz.sshj.transport.verification.HostKeyVerifier;
 public class SFTPSession extends Session<SSHClient> {
     private static final Logger log = LogManager.getLogger(SFTPSession.class);
 
-    private final PreferencesReader preferences = new HostPreferences(host);
+    private final PreferencesReader preferences = HostPreferencesFactory.get(host);
 
     private SFTPEngine sftp;
     private StateDisconnectListener disconnectListener;
@@ -193,6 +192,7 @@ public class SFTPSession extends Session<SSHClient> {
                     return key.verify(host, publicKey);
                 }
                 catch(BackgroundException e) {
+                    log.warn("Error {} verifying host key {} connecting to {}:{}", e, publicKey, hostname, port);
                     return false;
                 }
             }
@@ -283,27 +283,19 @@ public class SFTPSession extends Session<SSHClient> {
         // Ordered list of preferred authentication methods
         final List<AuthenticationProvider<Boolean>> defaultMethods = new ArrayList<>();
         if(preferences.getBoolean("ssh.authentication.agent.enable")) {
-            final String identityAgent = new OpenSSHIdentityAgentConfigurator().getIdentityAgent(host.getHostname());
-            switch(Platform.getDefault()) {
-                case windows:
-                    defaultMethods.add(new SFTPAgentAuthentication(client, new PageantAuthenticator()));
-                    try {
-                        defaultMethods.add(new SFTPAgentAuthentication(client,
-                                new WindowsOpenSSHAgentAuthenticator(identityAgent)));
-                    }
-                    catch(AgentProxyException e) {
-                        log.warn("Agent proxy failed with {}", e.getMessage());
-                    }
-                    break;
-                default:
-                    try {
-                        defaultMethods.add(new SFTPAgentAuthentication(client,
-                                new OpenSSHAgentAuthenticator(identityAgent)));
-                    }
-                    catch(AgentProxyException e) {
-                        log.warn("Agent proxy failed with {}", e.getMessage());
-                    }
-                    break;
+            final String configuration = new OpenSSHIdentityAgentConfigurator().getIdentityAgent(host.getHostname());
+            if(configuration != null) {
+                final String identityAgent = LocalFactory.get(configuration).getAbsolute();
+                log.debug("Determined identity agent {} for {}", identityAgent, host.getHostname());
+                switch(Platform.getDefault()) {
+                    case windows:
+                        defaultMethods.add(new SFTPAgentAuthentication(client, new PageantAuthenticator()));
+                        defaultMethods.add(new SFTPAgentAuthentication(client, new WindowsOpenSSHAgentAuthenticator(identityAgent)));
+                        break;
+                    default:
+                        defaultMethods.add(new SFTPAgentAuthentication(client, new OpenSSHAgentAuthenticator(identityAgent)));
+                        break;
+                }
             }
         }
         defaultMethods.add(new SFTPPublicKeyAuthentication(client));

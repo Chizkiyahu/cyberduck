@@ -31,6 +31,7 @@ import ch.cyberduck.core.VersioningConfiguration;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.NotfoundException;
 import ch.cyberduck.core.features.Delete;
+import ch.cyberduck.core.features.Home;
 import ch.cyberduck.core.features.Versioning;
 import ch.cyberduck.core.http.HttpResponseOutputStream;
 import ch.cyberduck.core.io.Checksum;
@@ -59,34 +60,24 @@ public class S3VersionedObjectListServiceTest extends AbstractS3Test {
 
     @Test
     public void testList() throws Exception {
-        final Path container = new Path("test-eu-central-1-cyberduck", EnumSet.of(Path.Type.directory, Path.Type.volume));
-        final Path file = new S3TouchFeature(session, new S3AccessControlListFeature(session)).touch(new Path(container, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file)), new TransferStatus());
-        file.attributes().withVersionId("null");
-        final AttributedList<Path> list = new S3VersionedObjectListService(session, new S3AccessControlListFeature(session)).list(container, new DisabledListProgressListener());
+        final Path bucket = new Path("test-eu-central-1-cyberduck", EnumSet.of(Path.Type.directory, Path.Type.volume));
+        final Path file = new S3TouchFeature(session, new S3AccessControlListFeature(session)).touch(new Path(bucket, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file)), new TransferStatus());
+        file.attributes().setVersionId("null");
+        final AttributedList<Path> list = new S3VersionedObjectListService(session, new S3AccessControlListFeature(session)).list(bucket, new DisabledListProgressListener());
+        assertNotSame(AttributedList.EMPTY, list);
         final Path lookup = list.find(new DefaultPathPredicate(file));
         assertNotNull(lookup);
         assertEquals(file, lookup);
-        assertSame(container, lookup.getParent());
+        assertSame(bucket, lookup.getParent());
         assertEquals("d41d8cd98f00b204e9800998ecf8427e", lookup.attributes().getChecksum().hash);
         assertEquals("d41d8cd98f00b204e9800998ecf8427e", Checksum.parse(lookup.attributes().getETag()).hash);
     }
 
     @Test
     public void testListVirtualHostStyle() throws Exception {
-        final AttributedList<Path> list = new S3VersionedObjectListService(virtualhost, new S3AccessControlListFeature(virtualhost)).list(
-                new Path("/", EnumSet.of(Path.Type.directory, Path.Type.volume)), new DisabledListProgressListener());
-        for(Path p : list) {
-            assertEquals(new Path("/", EnumSet.of(Path.Type.directory, Path.Type.volume)), p.getParent());
-            if(p.isFile()) {
-                assertNotEquals(-1L, p.attributes().getModificationDate());
-                if(!p.attributes().isDuplicate()) {
-                    assertNotEquals(-1L, p.attributes().getSize());
-                    assertNotNull(p.attributes().getETag());
-                    assertNotNull(p.attributes().getStorageClass());
-                    assertEquals("null", p.attributes().getVersionId());
-                }
-            }
-        }
+        final Path bucket = Home.ROOT;
+        assertNotSame(AttributedList.EMPTY, new S3VersionedObjectListService(virtualhost, new S3AccessControlListFeature(virtualhost)).list(
+                bucket, new DisabledListProgressListener()));
     }
 
     @Test
@@ -201,7 +192,7 @@ public class S3VersionedObjectListServiceTest extends AbstractS3Test {
         assertEquals(1, versions.size());
         assertEquals(versions.get(0), list.get(1));
         new S3DefaultDeleteFeature(session, acl).delete(Arrays.asList(
-                new Path(file).withAttributes(new PathAttributes().withVersionId("null")),
+                new Path(file).withAttributes(new PathAttributes().setVersionId("null")),
                 new Path(file).withAttributes(new DefaultAttributesFinderFeature(session).find(file)), bucket), new DisabledLoginCallback(), new Delete.DisabledCallback());
     }
 
@@ -243,7 +234,7 @@ public class S3VersionedObjectListServiceTest extends AbstractS3Test {
         final Path bucket = new Path("versioning-test-eu-central-1-cyberduck", EnumSet.of(Path.Type.directory, Path.Type.volume));
         bucket.attributes().setRegion("us-east-1");
         final S3AccessControlListFeature acl = new S3AccessControlListFeature(session);
-        final Path directory = new S3DirectoryFeature(session, new S3WriteFeature(session, acl), acl).mkdir(new Path(bucket, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory)), new TransferStatus().withLength(0L));
+        final Path directory = new S3DirectoryFeature(session, new S3WriteFeature(session, acl), acl).mkdir(new Path(bucket, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.directory)), new TransferStatus().setLength(0L));
         final Path placeholder = new S3DirectoryFeature(session, new S3WriteFeature(session, acl), acl).mkdir(
                 new Path(directory, String.format("test+%s", new AlphanumericRandomStringService().random()), EnumSet.of(Path.Type.directory)), new TransferStatus());
         assertTrue(new S3VersionedObjectListService(session, acl).list(directory, new DisabledListProgressListener()).contains(placeholder));

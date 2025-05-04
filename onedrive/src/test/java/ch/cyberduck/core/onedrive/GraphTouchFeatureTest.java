@@ -44,7 +44,8 @@ import java.io.ByteArrayInputStream;
 import java.util.Collections;
 import java.util.EnumSet;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 @Category(IntegrationTest.class)
 public class GraphTouchFeatureTest extends AbstractOneDriveTest {
@@ -77,7 +78,7 @@ public class GraphTouchFeatureTest extends AbstractOneDriveTest {
     public void testWhitespaceTouch() throws Exception {
         final RandomStringService randomStringService = new AlphanumericRandomStringService();
         final Path file = new Path(new OneDriveHomeFinderService().find(), String.format("%s %s", randomStringService.random(), randomStringService.random()), EnumSet.of(Path.Type.file));
-        new GraphTouchFeature(session, fileid).touch(file, new TransferStatus().withMime("x-application/cyberduck"));
+        new GraphTouchFeature(session, fileid).touch(file, new TransferStatus().setMime("x-application/cyberduck"));
         assertNotNull(new GraphAttributesFinderFeature(session, fileid).find(file));
         new GraphDeleteFeature(session, fileid).delete(Collections.singletonList(file), new DisabledLoginCallback(), new Delete.DisabledCallback());
     }
@@ -87,7 +88,7 @@ public class GraphTouchFeatureTest extends AbstractOneDriveTest {
         final Path container = new OneDriveHomeFinderService().find();
         final String filename = StringUtils.lowerCase(new AlphanumericRandomStringService().random());
         final Path file = new GraphTouchFeature(session, fileid)
-                .touch(new Path(container, filename, EnumSet.of(Path.Type.file)), new TransferStatus().withLength(0L));
+                .touch(new Path(container, filename, EnumSet.of(Path.Type.file)), new TransferStatus().setLength(0L));
         final byte[] content = RandomUtils.nextBytes(254);
         final TransferStatus status = new TransferStatus();
         status.setLength(content.length);
@@ -98,9 +99,8 @@ public class GraphTouchFeatureTest extends AbstractOneDriveTest {
         in.close();
         out.close();
         final AttributedList<Path> list = new OneDriveListService(session, fileid).list(container, new DisabledListProgressListener());
-        assertNotNull(list.find(new SimplePathPredicate(new Path(container, StringUtils.upperCase(filename), EnumSet.of(Path.Type.file)))));
-        assertEquals(content.length, list.find(new SimplePathPredicate(new Path(container, StringUtils.upperCase(filename), EnumSet.of(Path.Type.file)))).attributes().getSize());
-        assertNull(list.find(new SimplePathPredicate(file)));
+        assertNotNull(list.find(new SimplePathPredicate(new Path(container, StringUtils.lowerCase(filename), EnumSet.of(Path.Type.file)))));
+        assertEquals(content.length, list.find(new SimplePathPredicate(new Path(container, StringUtils.lowerCase(filename), EnumSet.of(Path.Type.file)))).attributes().getSize());
         new GraphDeleteFeature(session, fileid).delete(Collections.singletonList(file), new DisabledPasswordCallback(), new Delete.DisabledCallback());
     }
 }

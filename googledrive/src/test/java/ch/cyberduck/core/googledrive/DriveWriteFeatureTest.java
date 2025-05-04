@@ -111,7 +111,7 @@ public class DriveWriteFeatureTest extends AbstractDriveTest {
         final Path test = new Path(folder, new AlphanumericRandomStringService().random(), EnumSet.of(Path.Type.file));
         {
             final byte[] content = RandomUtils.nextBytes(2048);
-            final TransferStatus status = new TransferStatus().withLength(content.length);
+            final TransferStatus status = new TransferStatus().setLength(content.length);
             final HttpResponseOutputStream<File> out = new DriveWriteFeature(session, idProvider).write(test, status, new DisabledConnectionCallback());
             new StreamCopier(new TransferStatus(), new TransferStatus()).transfer(new ByteArrayInputStream(content), out);
             final String fileid = out.getStatus().getId();
@@ -124,7 +124,7 @@ public class DriveWriteFeatureTest extends AbstractDriveTest {
         {
             // Add file with same name
             final byte[] content = RandomUtils.nextBytes(1024);
-            final TransferStatus status = new TransferStatus().withLength(content.length);
+            final TransferStatus status = new TransferStatus().setLength(content.length);
             final HttpResponseOutputStream<File> out = new DriveWriteFeature(session, idProvider).write(test, status, new DisabledConnectionCallback());
             new StreamCopier(new TransferStatus(), new TransferStatus()).transfer(new ByteArrayInputStream(content), out);
             final String fileid = out.getStatus().getId();
@@ -164,7 +164,7 @@ public class DriveWriteFeatureTest extends AbstractDriveTest {
                 public boolean test(final Path f) {
                     return f.attributes().getSize() == 2048;
                 }
-            }).attributes().isHidden());
+            }).attributes().isTrashed());
             assertFalse(l2.find(new CacheReference<Path>() {
                 @Override
                 public boolean test(final Path f) {
@@ -186,10 +186,10 @@ public class DriveWriteFeatureTest extends AbstractDriveTest {
         new DriveTrashFeature(session, fileid).delete(Collections.singletonList(test), new DisabledPasswordCallback(), new Delete.DisabledCallback());
         assertNull(test.attributes().getFileId());
         assertFalse(new DriveFindFeature(session, fileid).find(test));
-        test.attributes().withFileId(id);
+        test.attributes().setFileId(id);
         assertTrue(new DriveFindFeature(session, fileid).find(test));
         assertTrue(new DefaultFindFeature(session).find(test));
-        assertTrue(new DriveAttributesFinderFeature(session, fileid).find(test).isHidden());
+        assertTrue(new DriveAttributesFinderFeature(session, fileid).find(test).isTrashed());
         // Files with duplicate flag (trashed) are filtered
         assertFalse(new DefaultFindFeature(session).find(new Path(test).withAttributes(PathAttributes.EMPTY)));
         final Path upload = new DriveTouchFeature(session, fileid).touch(test, new TransferStatus());

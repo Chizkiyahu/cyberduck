@@ -49,7 +49,7 @@ import ch.cyberduck.core.features.UnixPermission;
 import ch.cyberduck.core.features.Versioning;
 import ch.cyberduck.core.features.Write;
 import ch.cyberduck.core.io.ChecksumCompute;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.preferences.PreferencesReader;
 import ch.cyberduck.core.transfer.TransferPathFilter;
 import ch.cyberduck.core.transfer.TransferStatus;
@@ -86,7 +86,7 @@ public abstract class AbstractUploadFilter implements TransferPathFilter {
         this.find = find;
         this.attribute = attribute;
         this.options = options;
-        this.preferences = new HostPreferences(session.getHost());
+        this.preferences = HostPreferencesFactory.get(session.getHost());
     }
 
     @Override
@@ -102,8 +102,8 @@ public abstract class AbstractUploadFilter implements TransferPathFilter {
     public TransferStatus prepare(final Path file, final Local local, final TransferStatus parent, final ProgressListener progress) throws BackgroundException {
         log.debug("Prepare {}", file);
         final TransferStatus status = new TransferStatus()
-                .hidden(!hidden.accept(file))
-                .withLockId(parent.getLockId());
+                .setHidden(!hidden.accept(file))
+                .setLockId(parent.getLockId());
         // Read remote attributes first
         if(parent.isExists()) {
             if(find.find(file)) {
@@ -148,7 +148,7 @@ public abstract class AbstractUploadFilter implements TransferPathFilter {
                 if(feature.isSupported(file, Optional.of(renamed))) {
                     log.debug("Set temporary filename {}", renamed);
                     // Set target name after transfer
-                    status.withRename(renamed).withDisplayname(file);
+                    status.setRename(renamed).setDisplayname(file);
                     // Remember status of target file for later rename
                     status.getDisplayname().exists(status.isExists());
                     // Keep exist flag for subclasses to determine additional rename strategy
@@ -157,7 +157,7 @@ public abstract class AbstractUploadFilter implements TransferPathFilter {
                     log.warn("Cannot use temporary filename for upload with missing rename support for {}", file);
                 }
             }
-            status.withMime(new MappingMimeTypeService().getMime(file.getName()));
+            status.setMime(new MappingMimeTypeService().getMime(file.getName()));
         }
         if(file.isDirectory()) {
             status.setLength(0L);
@@ -170,7 +170,7 @@ public abstract class AbstractUploadFilter implements TransferPathFilter {
                     status.setPermission(status.getRemote().getPermission());
                 }
                 else {
-                    if(new HostPreferences(session.getHost()).getBoolean("queue.upload.permissions.default")) {
+                    if(HostPreferencesFactory.get(session.getHost()).getBoolean("queue.upload.permissions.default")) {
                         status.setPermission(feature.getDefault(file.getType()));
                     }
                     else {
@@ -294,17 +294,27 @@ public abstract class AbstractUploadFilter implements TransferPathFilter {
     public void apply(final Path file, final Local local, final TransferStatus status,
                       final ProgressListener listener) throws BackgroundException {
         if(file.isFile()) {
-            if(status.isExists() && !status.isAppend()) {
-                if(options.versioning) {
-                    switch(session.getHost().getProtocol().getVersioningMode()) {
-                        case custom:
-                            final Versioning feature = session.getFeature(Versioning.class);
-                            if(feature != null && feature.getConfiguration(file).isEnabled()) {
-                                if(feature.save(file)) {
-                                    log.debug("Clear exist flag for file {}", file);
-                                    status.exists(false).getDisplayname().exists(false);
+            if(status.isExists()) {
+                if(status.isAppend()) {
+                    // Append to existing file
+                    log.debug("Resume upload for existing file {}", file);
+                }
+                else {
+                    if(options.versioning) {
+                        switch(session.getHost().getProtocol().getVersioningMode()) {
+                            case custom:
+                                final Versioning feature = session.getFeature(Versioning.class);
+                                if(feature != null) {
+                                    log.debug("Use custom versioning {}", feature);
+                                    if(feature.getConfiguration(file).isEnabled()) {
+                                        log.debug("Enabled versioning for {}", file);
+                                        if(feature.save(file)) {
+                                            log.debug("Clear exist flag for file {}", file);
+                                            status.setExists(false).getDisplayname().exists(false);
+                                        }
+                                    }
                                 }
-                            }
+                        }
                     }
                 }
             }
@@ -369,7 +379,7 @@ public abstract class AbstractUploadFilter implements TransferPathFilter {
                 if(status.getDisplayname().remote != null) {
                     final Move move = session.getFeature(Move.class);
                     log.info("Rename file {} to {}", file, status.getDisplayname().remote);
-                    move.move(file, status.getDisplayname().remote, new TransferStatus(status).exists(status.getDisplayname().exists),
+                    move.move(file, status.getDisplayname().remote, new TransferStatus(status).setExists(status.getDisplayname().exists),
                             new Delete.DisabledCallback(), new DisabledConnectionCallback());
                 }
             }

@@ -45,7 +45,6 @@ import ch.cyberduck.core.features.Share;
 import ch.cyberduck.core.features.Touch;
 import ch.cyberduck.core.features.Trash;
 import ch.cyberduck.core.features.Write;
-import ch.cyberduck.core.http.ChainedServiceUnavailableRetryStrategy;
 import ch.cyberduck.core.http.CustomServiceUnavailableRetryStrategy;
 import ch.cyberduck.core.http.ExecutionCountServiceUnavailableRetryStrategy;
 import ch.cyberduck.core.http.HttpSession;
@@ -54,8 +53,8 @@ import ch.cyberduck.core.oauth.OAuth2AuthorizationService;
 import ch.cyberduck.core.oauth.OAuth2ErrorResponseInterceptor;
 import ch.cyberduck.core.oauth.OAuth2RequestInterceptor;
 import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.preferences.PreferencesFactory;
-import ch.cyberduck.core.preferences.PreferencesReader;
 import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.ssl.X509KeyManager;
 import ch.cyberduck.core.ssl.X509TrustManager;
@@ -82,7 +81,7 @@ import java.io.IOException;
 public class DeepboxSession extends HttpSession<DeepboxApiClient> {
     private static final Logger log = LogManager.getLogger(DeepboxSession.class);
 
-    private final PreferencesReader preferences = new HostPreferences(host);
+    private final HostPreferences preferences = HostPreferencesFactory.get(host);
     private final DeepboxIdProvider fileid = new DeepboxIdProvider(this);
 
     private DeepcloudApiClient deepcloudClient;
@@ -96,7 +95,7 @@ public class DeepboxSession extends HttpSession<DeepboxApiClient> {
     @Override
     protected DeepboxApiClient connect(final ProxyFinder proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
         final HttpClientBuilder configuration = builder.build(proxy, this, prompt);
-        authorizationService = new OAuth2RequestInterceptor(builder.build(proxy, this, prompt).build(), host, prompt) {
+        authorizationService = new OAuth2RequestInterceptor(configuration.build(), host, prompt) {
             @Override
             public void process(final HttpRequest request, final HttpContext context) throws HttpException, IOException {
                 if(request instanceof HttpRequestWrapper) {
@@ -154,7 +153,7 @@ public class DeepboxSession extends HttpSession<DeepboxApiClient> {
         final String locale;
         if(null == preferences.getProperty("deepbox.locale")) {
             locale = PreferencesFactory.get().locale();
-            host.setProperty("deepbox.locale", locale);
+            preferences.setProperty("deepbox.locale", locale);
         }
         else {
             locale = preferences.getProperty("deepbox.locale");
@@ -162,7 +161,7 @@ public class DeepboxSession extends HttpSession<DeepboxApiClient> {
         for(String name : DeepboxListService.VIRTUALFOLDERS) {
             final String localized = preferences.getProperty(DeepboxPathContainerService.toPinnedLocalizationPropertyKey(name));
             if(null == localized) {
-                host.setProperty(DeepboxPathContainerService.toPinnedLocalizationPropertyKey(name), LocaleFactory.localizedString(name, "Deepbox"));
+                preferences.setProperty(DeepboxPathContainerService.toPinnedLocalizationPropertyKey(name), LocaleFactory.localizedString(name, "Deepbox"));
             }
         }
         return locale;

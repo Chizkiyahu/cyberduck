@@ -26,7 +26,7 @@ import ch.cyberduck.core.features.Copy;
 import ch.cyberduck.core.http.HttpRange;
 import ch.cyberduck.core.io.Checksum;
 import ch.cyberduck.core.io.StreamListener;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.threading.BackgroundExceptionCallable;
 import ch.cyberduck.core.threading.DefaultRetryCallable;
 import ch.cyberduck.core.threading.ThreadPool;
@@ -65,8 +65,8 @@ public class B2LargeCopyFeature implements Copy {
     private final Integer concurrency;
 
     public B2LargeCopyFeature(final B2Session session, final B2VersionIdProvider fileid) {
-        this(session, fileid, new HostPreferences(session.getHost()).getLong("b2.copy.largeobject.size"),
-                new HostPreferences(session.getHost()).getInteger("b2.upload.largeobject.concurrency"));
+        this(session, fileid, HostPreferencesFactory.get(session.getHost()).getLong("b2.copy.largeobject.size"),
+                HostPreferencesFactory.get(session.getHost()).getInteger("b2.upload.largeobject.concurrency"));
     }
 
     public B2LargeCopyFeature(final B2Session session, final B2VersionIdProvider fileid, final Long partSize, final Integer concurrency) {
@@ -129,7 +129,7 @@ public class B2LargeCopyFeature implements Copy {
             session.getClient().finishLargeFileUpload(response.getFileId(), checksums.toArray(new String[checksums.size()]));
             log.info("Finished large file upload {} with {} parts", target, completed.size());
             fileid.cache(target, response.getFileId());
-            return target.withAttributes(new PathAttributes(source.attributes()).withVersionId(response.getFileId()));
+            return new Path(target).withAttributes(new PathAttributes(source.attributes()).setVersionId(response.getFileId()));
         }
         catch(B2ApiException e) {
             throw new B2ExceptionMappingService(fileid).map("Cannot copy {0}", e, source);

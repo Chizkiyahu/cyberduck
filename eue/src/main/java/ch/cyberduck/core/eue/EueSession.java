@@ -22,7 +22,6 @@ import ch.cyberduck.core.Host;
 import ch.cyberduck.core.HostKeyCallback;
 import ch.cyberduck.core.ListService;
 import ch.cyberduck.core.LoginCallback;
-import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathNormalizer;
 import ch.cyberduck.core.UrlProvider;
 import ch.cyberduck.core.eue.io.swagger.client.ApiException;
@@ -30,7 +29,6 @@ import ch.cyberduck.core.eue.io.swagger.client.api.GetUserSharesApi;
 import ch.cyberduck.core.eue.io.swagger.client.api.UserInfoApi;
 import ch.cyberduck.core.eue.io.swagger.client.model.UserSharesModel;
 import ch.cyberduck.core.exception.BackgroundException;
-import ch.cyberduck.core.exception.NotfoundException;
 import ch.cyberduck.core.features.*;
 import ch.cyberduck.core.http.CustomServiceUnavailableRetryStrategy;
 import ch.cyberduck.core.http.DefaultHttpRateLimiter;
@@ -41,6 +39,7 @@ import ch.cyberduck.core.http.RateLimitingHttpRequestInterceptor;
 import ch.cyberduck.core.oauth.OAuth2ErrorResponseInterceptor;
 import ch.cyberduck.core.oauth.OAuth2RequestInterceptor;
 import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.preferences.PreferencesFactory;
 import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.ssl.X509KeyManager;
@@ -74,7 +73,6 @@ import java.nio.charset.StandardCharsets;
 import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.EnumSet;
 import java.util.Optional;
 
 import com.google.gson.JsonElement;
@@ -84,15 +82,16 @@ import com.google.gson.JsonParser;
 public class EueSession extends HttpSession<CloseableHttpClient> {
     private static final Logger log = LogManager.getLogger(EueSession.class);
 
+    private final HostPreferences preferences = HostPreferencesFactory.get(host);
+
     private OAuth2RequestInterceptor authorizationService;
 
     private String basePath;
-    private String vaultResourceId;
 
     private final EueResourceIdProvider resourceid = new EueResourceIdProvider(this);
 
     private final ExpiringObjectHolder<UserSharesModel> userShares
-            = new ExpiringObjectHolder<>(new HostPreferences(host).getLong("eue.shares.ttl"));
+            = new ExpiringObjectHolder<>(preferences.getLong("eue.shares.ttl"));
 
     public EueSession(final Host host, final X509TrustManager trust, final X509KeyManager key) {
         super(host, trust, key);
@@ -101,7 +100,7 @@ public class EueSession extends HttpSession<CloseableHttpClient> {
     @Override
     protected CloseableHttpClient connect(final ProxyFinder proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
         final HttpClientBuilder configuration = builder.build(proxy, this, prompt);
-        authorizationService = new OAuth2RequestInterceptor(builder.build(proxy, this, prompt).addInterceptorLast(new HttpRequestInterceptor() {
+        authorizationService = new OAuth2RequestInterceptor(configuration.addInterceptorLast(new HttpRequestInterceptor() {
             @Override
             public void process(final HttpRequest request, final HttpContext context) {
                 request.addHeader(HttpHeaders.AUTHORIZATION,
@@ -116,7 +115,7 @@ public class EueSession extends HttpSession<CloseableHttpClient> {
         configuration.addInterceptorLast(new HttpRequestInterceptor() {
             @Override
             public void process(final HttpRequest request, final HttpContext context) {
-                final String identifier = new HostPreferences(host).getProperty("apikey");
+                final String identifier = preferences.getProperty("apikey");
                 if(StringUtils.isNotBlank(identifier)) {
                     request.addHeader(new BasicHeader("X-UI-API-KEY", identifier));
                 }
@@ -125,19 +124,12 @@ public class EueSession extends HttpSession<CloseableHttpClient> {
         configuration.addInterceptorLast(new HttpRequestInterceptor() {
             @Override
             public void process(final HttpRequest request, final HttpContext context) {
-                final String identifier = new HostPreferences(host).getProperty("app");
+                final String identifier = preferences.getProperty("app");
                 if(StringUtils.isNotBlank(identifier)) {
                     final String app = String.format("%s.%s",
                             PreferencesFactory.get().getProperty("application.version"),
                             PreferencesFactory.get().getProperty("application.revision"));
                     request.addHeader(new BasicHeader("X-UI-APP", MessageFormat.format(identifier, app)));
-                    if(StringUtils.isNotBlank(vaultResourceId)) {
-                        if(StringUtils.contains(request.getRequestLine().getUri(), vaultResourceId)) {
-                            // Overwrite default
-                            request.setHeader(new BasicHeader("X-UI-APP", MessageFormat.format(
-                                    StringUtils.replace(identifier, "/", ".tresor/"), app)));
-                        }
-                    }
                 }
             }
         });
@@ -159,14 +151,14 @@ public class EueSession extends HttpSession<CloseableHttpClient> {
                         public void progress(final Integer seconds) {
                             log.warn("Pause for {} seconds because of traffic hint", seconds);
                         }
-                    }, new HostPreferences(host).getInteger("eue.limit.hint.second"));
+                    }, preferences.getInteger("eue.limit.hint.second"));
                     pause.await();
                 }
             }
         });
-        if(new HostPreferences(host).getBoolean("eue.limit.requests.enable")) {
+        if(preferences.getBoolean("eue.limit.requests.enable")) {
             configuration.addInterceptorLast(new RateLimitingHttpRequestInterceptor(new DefaultHttpRateLimiter(
-                    new HostPreferences(host).getInteger("eue.limit.requests.second")
+                    preferences.getInteger("eue.limit.requests.second")
             )));
         }
         return configuration.build();
@@ -210,18 +202,6 @@ public class EueSession extends HttpSession<CloseableHttpClient> {
                 }
                 catch(IOException e) {
                     log.warn("Ignore failure {} running Personal Agent Context Service (PACS) request", e.getMessage());
-                }
-            }
-            if(StringUtils.isNotBlank(new HostPreferences(host).getProperty("cryptomator.vault.name.default"))) {
-                final Path vault = new Path(new HostPreferences(host).getProperty("cryptomator.vault.name.default"), EnumSet.of(Path.Type.directory));
-                try {
-                    vaultResourceId = new EueAttributesFinderFeature(this, resourceid).find(vault).getFileId();
-                    host.setProperty("cryptomator.enable", String.valueOf(true));
-                }
-                catch(NotfoundException e) {
-                    log.warn("Disable vault features with no existing vault found at {}", vault);
-                    // Disable vault features
-                    host.setProperty("cryptomator.enable", String.valueOf(false));
                 }
             }
             userShares.set(this.userShares());

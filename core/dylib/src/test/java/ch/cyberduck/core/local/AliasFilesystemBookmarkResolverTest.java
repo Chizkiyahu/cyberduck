@@ -15,10 +15,9 @@ package ch.cyberduck.core.local;
  * GNU General Public License for more details.
  */
 
-import ch.cyberduck.binding.foundation.NSData;
 import ch.cyberduck.binding.foundation.NSURL;
+import ch.cyberduck.core.AlphanumericRandomStringService;
 import ch.cyberduck.core.Local;
-import ch.cyberduck.core.exception.LocalAccessDeniedException;
 
 import org.junit.Test;
 
@@ -32,40 +31,17 @@ public class AliasFilesystemBookmarkResolverTest {
     public void testCreateNotFound() throws Exception {
         final String name = UUID.randomUUID().toString();
         Local l = new FinderLocal(System.getProperty("user.dir"), name);
-        try {
-            assertNull(new AliasFilesystemBookmarkResolver().create(l));
-            fail();
-        }
-        catch(LocalAccessDeniedException e) {
-            //
-        }
+        assertNull(new AliasFilesystemBookmarkResolver().create(l));
     }
 
     @Test
-    public void testCreateFileTemporary() throws Exception {
+    public void testCreate() throws Exception {
         final String name = UUID.randomUUID().toString();
-        Local l = new FinderLocal(System.getProperty("java.io.tmpdir"), name);
+        final Local l = new FinderLocal(System.getProperty("user.dir"), name);
         new DefaultLocalTouchFeature().touch(l);
         try {
             final AliasFilesystemBookmarkResolver resolver = new AliasFilesystemBookmarkResolver();
-            final NSData bookmark = resolver.create(l);
-            assertNull(bookmark);
-            final NSURL resolved = resolver.resolve(bookmark);
-            assertNull(resolved);
-        }
-        finally {
-            l.delete();
-        }
-    }
-
-    @Test
-    public void testCreateFileUserdir() throws Exception {
-        final String name = UUID.randomUUID().toString();
-        Local l = new FinderLocal(System.getProperty("user.dir"), name);
-        new DefaultLocalTouchFeature().touch(l);
-        try {
-            final AliasFilesystemBookmarkResolver resolver = new AliasFilesystemBookmarkResolver();
-            final NSData bookmark = resolver.create(l);
+            final String bookmark = resolver.create(l);
             assertNotNull(bookmark);
             final NSURL resolved = resolver.resolve(bookmark);
             assertNotNull(resolved);
@@ -73,5 +49,33 @@ public class AliasFilesystemBookmarkResolverTest {
         finally {
             l.delete();
         }
+    }
+
+    @Test
+    public void testRename() throws Exception {
+        final Local source = new FinderLocal(System.getProperty("user.dir"), new AlphanumericRandomStringService().random());
+        new DefaultLocalTouchFeature().touch(source);
+        final Local target = new FinderLocal(System.getProperty("user.dir"), new AlphanumericRandomStringService().random());
+        new DefaultLocalTouchFeature().touch(target);
+        final AliasFilesystemBookmarkResolver resolver = new AliasFilesystemBookmarkResolver();
+
+        final String bookmarkSource = resolver.create(source);
+        assertNotNull(bookmarkSource);
+        assertNotNull(resolver.resolve(bookmarkSource));
+        assertEquals(source.getAbsolute(), resolver.resolve(bookmarkSource).path());
+
+        final String bookmarkTarget = resolver.create(target);
+        assertNotNull(bookmarkTarget);
+        assertNotNull(resolver.resolve(bookmarkTarget));
+        assertEquals(target.getAbsolute(), resolver.resolve(bookmarkTarget).path());
+
+        new Local(source.getAbsolute()).rename(target);
+        assertFalse(source.exists());
+        assertTrue(target.exists());
+
+        assertEquals(target.getAbsolute(), resolver.resolve(bookmarkSource).path());
+        assertEquals(target.getAbsolute(), resolver.resolve(bookmarkTarget).path());
+
+        target.delete();
     }
 }

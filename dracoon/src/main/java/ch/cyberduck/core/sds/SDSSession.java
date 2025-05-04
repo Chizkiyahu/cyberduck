@@ -31,7 +31,7 @@ import ch.cyberduck.core.oauth.OAuth2AuthorizationService;
 import ch.cyberduck.core.oauth.OAuth2ErrorResponseInterceptor;
 import ch.cyberduck.core.oauth.OAuth2RequestInterceptor;
 import ch.cyberduck.core.preferences.HostPreferences;
-import ch.cyberduck.core.preferences.PreferencesReader;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 import ch.cyberduck.core.proxy.ProxyFinder;
 import ch.cyberduck.core.sds.io.swagger.client.ApiException;
 import ch.cyberduck.core.sds.io.swagger.client.JSON;
@@ -105,7 +105,7 @@ public class SDSSession extends HttpSession<SDSApiClient> {
 
     private OAuth2RequestInterceptor authorizationService;
 
-    private final PreferencesReader preferences = new HostPreferences(host);
+    private final HostPreferences preferences = HostPreferencesFactory.get(host);
 
     private final ExpiringObjectHolder<UserAccountWrapper> userAccount
             = new ExpiringObjectHolder<>(preferences.getLong("sds.useracount.ttl"));
@@ -151,7 +151,7 @@ public class SDSSession extends HttpSession<SDSApiClient> {
     @Override
     protected SDSApiClient connect(final ProxyFinder proxy, final HostKeyCallback key, final LoginCallback prompt, final CancelCallback cancel) throws BackgroundException {
         final HttpClientBuilder configuration = builder.build(proxy, this, prompt);
-        authorizationService = new OAuth2RequestInterceptor(builder.build(proxy, this, prompt).addInterceptorLast(new HttpRequestInterceptor() {
+        authorizationService = new OAuth2RequestInterceptor(configuration.addInterceptorLast(new HttpRequestInterceptor() {
             @Override
             public void process(final HttpRequest request, final HttpContext context) {
                 if(request instanceof HttpRequestWrapper) {
@@ -193,9 +193,9 @@ public class SDSSession extends HttpSession<SDSApiClient> {
 
                 new ExecutionCountServiceUnavailableRetryStrategy(new PreconditionFailedResponseInterceptor(host, authorizationService, prompt),
                         new OAuth2ErrorResponseInterceptor(host, authorizationService))));
-        if(new HostPreferences(host).getBoolean("sds.limit.requests.enable")) {
+        if(HostPreferencesFactory.get(host).getBoolean("sds.limit.requests.enable")) {
             configuration.addInterceptorLast(new RateLimitingHttpRequestInterceptor(new DefaultHttpRateLimiter(
-                    new HostPreferences(host).getInteger("sds.limit.requests.second")
+                    HostPreferencesFactory.get(host).getInteger("sds.limit.requests.second")
             )));
         }
         configuration.addInterceptorLast(authorizationService);
@@ -286,7 +286,7 @@ public class SDSSession extends HttpSession<SDSApiClient> {
             log.warn("Failure reading software version. {}", e.getMessage());
             isS3DirectUploadSupported = true;
         }
-        host.setProperty("sds.upload.s3.enable", String.valueOf(isS3DirectUploadSupported));
+        preferences.setProperty("sds.upload.s3.enable", String.valueOf(isS3DirectUploadSupported));
     }
 
     private UserKeyPair.Version getRequiredKeyPairVersion() {
@@ -602,13 +602,13 @@ public class SDSSession extends HttpSession<SDSApiClient> {
             return (T) new SDSDelegatingReadFeature(this, nodeid, new SDSReadFeature(this, nodeid));
         }
         if(type == Upload.class) {
-            if(new HostPreferences(host).getBoolean("sds.upload.s3.enable")) {
+            if(HostPreferencesFactory.get(host).getBoolean("sds.upload.s3.enable")) {
                 return (T) new SDSDirectS3UploadFeature(this, nodeid, new SDSDirectS3WriteFeature(this, nodeid));
             }
             return (T) new DefaultUploadFeature(new SDSDelegatingWriteFeature(this, nodeid, new SDSMultipartWriteFeature(this, nodeid)));
         }
         if(type == Write.class || type == MultipartWrite.class) {
-            if(new HostPreferences(host).getBoolean("sds.upload.s3.enable")) {
+            if(HostPreferencesFactory.get(host).getBoolean("sds.upload.s3.enable")) {
                 return (T) new SDSDelegatingWriteFeature(this, nodeid, new SDSDirectS3MultipartWriteFeature(this, nodeid));
             }
             return (T) new SDSDelegatingWriteFeature(this, nodeid, new SDSMultipartWriteFeature(this, nodeid));

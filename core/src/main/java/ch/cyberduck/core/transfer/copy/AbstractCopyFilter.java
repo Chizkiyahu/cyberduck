@@ -21,6 +21,7 @@ import ch.cyberduck.core.Acl;
 import ch.cyberduck.core.Filter;
 import ch.cyberduck.core.Local;
 import ch.cyberduck.core.LocaleFactory;
+import ch.cyberduck.core.MappingMimeTypeService;
 import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathAttributes;
 import ch.cyberduck.core.Permission;
@@ -84,8 +85,8 @@ public abstract class AbstractCopyFilter implements TransferPathFilter {
     @Override
     public TransferStatus prepare(final Path file, final Local n, final TransferStatus parent, final ProgressListener progress) throws BackgroundException {
         final TransferStatus status = new TransferStatus()
-                .hidden(!hidden.accept(file))
-                .withLockId(parent.getLockId());
+                .setHidden(!hidden.accept(file))
+                .setLockId(parent.getLockId());
         if(parent.isExists()) {
             final Path target = files.get(file);
             if(find.find(target)) {
@@ -100,6 +101,7 @@ public abstract class AbstractCopyFilter implements TransferPathFilter {
         if(file.isFile()) {
             // Content length
             status.setLength(attributes.getSize());
+            status.setMime(new MappingMimeTypeService().getMime(file.getName()));
         }
         if(file.isDirectory()) {
             status.setLength(0L);

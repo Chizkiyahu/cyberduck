@@ -39,9 +39,10 @@ import ch.cyberduck.core.deepcloud.io.swagger.client.api.UsersApi;
 import ch.cyberduck.core.deepcloud.io.swagger.client.model.CompanyRoles;
 import ch.cyberduck.core.deepcloud.io.swagger.client.model.StructureEnum;
 import ch.cyberduck.core.deepcloud.io.swagger.client.model.UserFull;
+import ch.cyberduck.core.deepcloud.io.swagger.client.model.VerificationStateEnum;
 import ch.cyberduck.core.exception.AccessDeniedException;
 import ch.cyberduck.core.exception.BackgroundException;
-import ch.cyberduck.core.preferences.HostPreferences;
+import ch.cyberduck.core.preferences.HostPreferencesFactory;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
@@ -104,7 +105,7 @@ public class DeepboxListService implements ListService {
         this.fileid = fileid;
         this.attributes = new DeepboxAttributesFinderFeature(session, fileid);
         this.containerService = new DeepboxPathContainerService(session, fileid);
-        this.chunksize = new HostPreferences(session.getHost()).getInteger("deepbox.listing.chunksize");
+        this.chunksize = HostPreferencesFactory.get(session.getHost()).getInteger("deepbox.listing.chunksize");
     }
 
     @Override
@@ -226,6 +227,7 @@ public class DeepboxListService implements ListService {
                         list.add(new Path(directory, DeepboxPathNormalizer.name(node.getDisplayName()),
                                 EnumSet.of(node.getType() == Node.TypeEnum.FILE ? Path.Type.file : Path.Type.directory)).withAttributes(attributes.toAttributes(node)));
                     }
+                    listener.chunk(directory, list);
                     size = files.getSize();
                     offset += chunksize;
                 }
@@ -249,17 +251,23 @@ public class DeepboxListService implements ListService {
                 final String deepBoxNodeId = fileid.getDeepBoxNodeId(directory);
                 final String boxNodeId = fileid.getBoxNodeId(directory);
                 final Box box = rest.getBox(deepBoxNodeId, boxNodeId);
-                if(box.getBoxPolicy().isCanListQueue()) {
-                    final Path inbox = new Path(directory, containerService.getPinnedLocalization(INBOX), EnumSet.of(Path.Type.directory, Path.Type.volume));
-                    list.add(inbox.withAttributes(attributes.find(inbox)));
+                if(HostPreferencesFactory.get(session.getHost()).getBoolean("deepbox.listing.box.inbox")) {
+                    if(box.getBoxPolicy().isCanListQueue()) {
+                        final Path inbox = new Path(directory, containerService.getPinnedLocalization(INBOX), EnumSet.of(Path.Type.directory, Path.Type.volume));
+                        list.add(inbox.withAttributes(attributes.find(inbox)));
+                    }
                 }
-                if(box.getBoxPolicy().isCanListFilesRoot()) {
-                    final Path documents = new Path(directory, containerService.getPinnedLocalization(DOCUMENTS), EnumSet.of(Path.Type.directory, Path.Type.volume));
-                    list.add(documents.withAttributes(attributes.find(documents)));
+                if(HostPreferencesFactory.get(session.getHost()).getBoolean("deepbox.listing.box.documents")) {
+                    if(box.getBoxPolicy().isCanListFilesRoot()) {
+                        final Path documents = new Path(directory, containerService.getPinnedLocalization(DOCUMENTS), EnumSet.of(Path.Type.directory, Path.Type.volume));
+                        list.add(documents.withAttributes(attributes.find(documents)));
+                    }
                 }
-                if(box.getBoxPolicy().isCanAccessTrash()) {
-                    final Path trash = new Path(directory, containerService.getPinnedLocalization(TRASH), EnumSet.of(Path.Type.directory, Path.Type.volume));
-                    list.add(trash.withAttributes(attributes.find(trash)));
+                if(HostPreferencesFactory.get(session.getHost()).getBoolean("deepbox.listing.box.trash")) {
+                    if(box.getBoxPolicy().isCanAccessTrash()) {
+                        final Path trash = new Path(directory, containerService.getPinnedLocalization(TRASH), EnumSet.of(Path.Type.directory, Path.Type.volume));
+                        list.add(trash.withAttributes(attributes.find(trash)));
+                    }
                 }
                 listener.chunk(directory, list);
                 return list;
@@ -352,7 +360,7 @@ public class DeepboxListService implements ListService {
                     list.add(new Path(directory,
                             String.format("%s (%s)", DeepboxPathNormalizer.name(box.getCompany().getDisplayName()), DeepboxPathNormalizer.name(box.getBoxName())),
                             EnumSet.of(Path.Type.directory, Path.Type.volume),
-                            new PathAttributes().withFileId(box.getBoxNodeId()).withCustom("deepboxName", box.getDeepBoxName()))
+                            new PathAttributes().setFileId(box.getBoxNodeId()).setCustom(DeepboxIdProvider.DEEPBOX_NAME_PROEPRTY_KEY, box.getDeepBoxName()))
                     );
                 }
                 // Mark duplicates
@@ -375,7 +383,9 @@ public class DeepboxListService implements ListService {
                 final UserFull user = rest.usersMeList();
                 for(CompanyRoles company : user.getCompanies()) {
                     if(company.getStructure() == StructureEnum.PERSONAL) {
-                        continue;
+                        if(company.getVerificationState() == VerificationStateEnum.NONE) {
+                            continue;
+                        }
                     }
                     list.add(new Path(directory, DeepboxPathNormalizer.name(company.getDisplayName()), EnumSet.of(Path.Type.directory, Path.Type.volume),
                             attributes.toAttributes(company))
