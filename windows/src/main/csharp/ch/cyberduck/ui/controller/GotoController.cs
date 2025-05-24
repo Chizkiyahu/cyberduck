@@ -22,6 +22,7 @@ using System.Windows.Forms;
 using ch.cyberduck.core;
 using Ch.Cyberduck.Core;
 using static Ch.Cyberduck.ImageHelper;
+using java.util;
 
 namespace Ch.Cyberduck.Ui.Controller
 {
@@ -51,16 +52,27 @@ namespace Ch.Cyberduck.Ui.Controller
             return Utils.IsNotBlank(View.InputText);
         }
 
-        private void GotoFolder(Path workdir, String filename)
+        private void GotoFolder(Path workdir, String input)
         {
-            Path dir = PathNormalizer.compose(workdir, filename);
-            if (workdir.getParent().Equals(dir))
+            String delimiter = Path.DELIMITER.ToString();
+            if (!input.EndsWith(delimiter))
             {
-                BrowserController.SetWorkdir(dir, workdir);
+                String parentPath = PathNormalizer.parent(input, Path.DELIMITER);
+                Path dir = PathNormalizer.compose(workdir, parentPath == null ? delimiter : parentPath);
+                Path file = new Path(dir, PathNormalizer.name(input), EnumSet.of(AbstractPath.Type.file));
+                BrowserController.SetWorkdir(dir, file);
             }
             else
             {
-                BrowserController.SetWorkdir(dir);
+                Path dir = PathNormalizer.compose(workdir, input);
+                if (workdir.getParent().Equals(dir))
+                {
+                    BrowserController.SetWorkdir(dir, workdir);
+                }
+                else
+                {
+                    BrowserController.SetWorkdir(dir);
+                }
             }
         }
     }

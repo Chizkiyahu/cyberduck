@@ -34,6 +34,8 @@ import ch.cyberduck.core.Path;
 import ch.cyberduck.core.PathNormalizer;
 import ch.cyberduck.core.resources.IconCacheFactory;
 
+import java.util.EnumSet;
+
 import org.apache.commons.lang3.StringUtils;
 import org.rococoa.cocoa.foundation.NSInteger;
 import org.rococoa.cocoa.foundation.NSRect;
@@ -95,14 +97,23 @@ public class GotoController extends AlertController {
     public void callback(final int returncode) {
         switch(returncode) {
             case DEFAULT_OPTION:
-                final String filename = folderCombobox.stringValue();
+                final String input = folderCombobox.stringValue();
                 final Path workdir = parent.workdir();
-                final Path directory = PathNormalizer.compose(workdir, filename);
-                if(workdir.getParent().equals(directory)) {
-                    parent.setWorkdir(directory, workdir);
+                final String delimiter = String.valueOf(Path.DELIMITER);
+                if(!StringUtils.endsWith(input, delimiter)) {
+                    final String parentPath = PathNormalizer.parent(input, Path.DELIMITER);
+                    final Path directory = PathNormalizer.compose(workdir, parentPath == null ? delimiter : parentPath);
+                    final Path file = new Path(directory, PathNormalizer.name(input), EnumSet.of(Path.Type.file));
+                    parent.setWorkdir(directory, file);
                 }
                 else {
-                    parent.setWorkdir(directory);
+                    final Path directory = PathNormalizer.compose(workdir, input);
+                    if(workdir.getParent().equals(directory)) {
+                        parent.setWorkdir(directory, workdir);
+                    }
+                    else {
+                        parent.setWorkdir(directory);
+                    }
                 }
                 break;
         }
