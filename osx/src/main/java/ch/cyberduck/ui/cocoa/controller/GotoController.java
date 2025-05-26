@@ -39,6 +39,7 @@ import org.rococoa.cocoa.foundation.NSInteger;
 import org.rococoa.cocoa.foundation.NSRect;
 
 import java.util.Comparator;
+import java.util.EnumSet;
 
 public class GotoController extends AlertController {
 
@@ -95,14 +96,20 @@ public class GotoController extends AlertController {
     public void callback(final int returncode) {
         switch(returncode) {
             case DEFAULT_OPTION:
-                final String filename = folderCombobox.stringValue();
+                final String filename = folderCombobox.stringValue().trim();
                 final Path workdir = parent.workdir();
-                final Path directory = PathNormalizer.compose(workdir, filename);
-                if(workdir.getParent().equals(directory)) {
-                    parent.setWorkdir(directory, workdir);
-                }
-                else {
-                    parent.setWorkdir(directory);
+                java.io.File localFileCheck = new java.io.File(filename);
+                if (localFileCheck.isFile()) {
+                    Path filePath = new Path(filename, EnumSet.of(Path.Type.file));
+                    parent.setWorkdir(filePath.getParent(), filePath);
+                } else {
+                    final Path directory = PathNormalizer.compose(workdir, filename);
+                    if(workdir.getParent().equals(directory)) {
+                        parent.setWorkdir(directory, workdir);
+                    }
+                    else {
+                        parent.setWorkdir(directory);
+                    }
                 }
                 break;
         }
